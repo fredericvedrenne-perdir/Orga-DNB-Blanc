@@ -381,6 +381,31 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
 
 @keyframes bounce { 0%, 100% {transform: translateY(0);} 50% {transform: translateY(-5px);} }
 
+/* Style de la modale personnalisée */
+.custom-modal {
+    position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.modal-content {
+    background: white; padding: 30px; border-radius: 15px; max-width: 550px; width: 90%;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3); text-align: center;
+}
+.tiles-container {
+    display: flex; gap: 15px; margin-top: 25px;
+}
+.tile {
+    flex: 1; padding: 20px; border: 2px solid #edeff0; border-radius: 12px; cursor: pointer;
+    transition: all 0.2s ease-in-out; background: #fdfdfd;
+}
+.tile:hover {
+    border-color: #3498db; background-color: #f0f7ff; transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(52,152,219,0.1);
+}
+.tile-icon { font-size: 2.5rem; margin-bottom: 10px; }
+.tile-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 5px; color: #34495e; }
+.tile-desc { font-size: 0.85rem; color: #7f8c8d; line-height: 1.3; }
+
 </style>
 </head>
 <body>
@@ -512,6 +537,7 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
                                 <span style="border-left:1px solid #ccc; margin:0 5px;"></span>
                                 
                                 <button class="btn btn-secondary" onclick="generateAnonymityCodes()">🎲 Anonymat</button>
+								<button class="btn btn-success" onclick="exportStudentsToExcel()">📊 Export Elèves et anonymat en Excel</button>
                                 <button class="btn btn-dark" onclick="exportAnonymityList()">📜 Liste Secrétariat</button>
                                 <button class="btn btn-dark" onclick="openLabelConfig('anonymat')">✂️ Étiquettes Copies</button>
                             </div>
@@ -836,14 +862,21 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
             </div>
         </div>
 		<div id="convoc-profs" class="section">
-            <div class="card">
-                <h3>Convocations Professeurs</h3>
-                <p>Générez les convocations individuelles contenant uniquement les créneaux de surveillance de chaque professeur.</p>
-                <div style="padding:20px; background:#f8f9fa; border:1px solid #ddd; border-radius:8px; text-align:center;">
-                    <button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportConvocationTeachers()">🖨️ Générer PDF Professeurs</button>
-                </div>
-            </div>
+    <div class="card">
+        <h3>Convocations Professeurs</h3>
+        <p>Générez les convocations individuelles contenant uniquement les créneaux de surveillance de chaque professeur.</p>
+        
+        <div style="margin-bottom:15px;">
+            <label style="font-weight:bold; display:block; margin-bottom:5px;">Consignes à destination des professeurs :</label>
+            <textarea id="txtConvocProfsInfo" rows="10" style="width:100%; height:150px; padding:10px; border:1px solid #ccc; border-radius:5px; font-family:sans-serif; font-size:0.9rem; line-height:1.4;">Les surveillants sont priés de se présenter au secrétariat 15 minutes avant le début des épreuves pour récupérer les pochettes de salle et les listes d'émargement.
+            </textarea>
         </div>
+
+        <div style="padding:20px; background:#f8f9fa; border:1px solid #ddd; border-radius:8px; text-align:center;">
+            <button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportConvocationTeachers()">🖨️ Générer PDF Professeurs</button>
+        </div>
+    </div>
+</div>
         <div id="res-import" class="section">
             <div class="card">
                 <div class="card-header-flex"><h3>Import des Résultats DNB Blanc</h3><button class="lock-btn" id="lock-grades" onclick="toggleLock('grades')">🔓 Verrouiller</button></div>
@@ -989,6 +1022,32 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
         </div>
     </div>
 </div>
+
+<div id="modalHGEMC" class="custom-modal" style="display:none;">
+        <div class="modal-content">
+            <h4 style="margin-top:0; color:#2c3e50;">Configuration Histoire-Géo / EMC</h4>
+            <p>Comment sont organisées les notes dans votre fichier Excel ?</p>
+            
+            <div class="tiles-container">
+                <div class="tile" onclick="setHGMode(false)">
+                    <div class="tile-icon">📚</div>
+                    <div class="tile-title">Note Unique</div>
+                    <div class="tile-desc">Une seule colonne "HG-EMC"<br>(Note sur 50)</div>
+                </div>
+                
+                <div class="tile" onclick="setHGMode(true)">
+                    <div class="tile-icon">⚖️</div>
+                    <div class="tile-title">Notes Séparées</div>
+                    <div class="tile-desc">Deux colonnes : HG (coeff 1.5) et EMC (coeff 0.5)</div>
+                </div>
+            </div>
+            
+            <button class="btn btn-secondary" onclick="closeHGModal()" style="margin-top:20px;">Annuler l'import</button>
+        </div>
+    </div>
+
+</body>
+</html>
 
 <script>
     const DEFAULT_LABELS = [
@@ -1246,307 +1305,302 @@ function cleanNumber(val) {
     return isNaN(num) ? null : num;
 }
 
+
+/**
+ * Variables globales pour la gestion de l'import HG/EMC
+ */
+let tempImportData = null;
+
+/**
+ * Fonction principale d'aiguillage de l'import Excel
+ */
 function processExcelData(data, type) {
     if (!data || data.length === 0) return alert("❌ Le fichier semble vide ou illisible.");
     
-    // Journal de bord
-    let report = { success: 0, errors: [] };
-    const addError = (line, msg) => {
-        // On limite l'affichage à 20 erreurs pour ne pas exploser l'écran
-        if(report.errors.length < 20) report.errors.push(`Ligne ${line}: ${msg}`);
-        else if(report.errors.length === 20) report.errors.push("... et d'autres erreurs.");
-    };
-
-    // --- 1. IMPORT DES NOTES (Le plus critique) ---
+    // --- CAS PARTICULIER : NOTES (Demande le choix du format via les tuiles) ---
     if (type === 'grades') {
-        // Détection des colonnes
-        const row0 = data[0];
+        tempImportData = data; 
+        document.getElementById('modalHGEMC').style.display = 'flex';
+        return; 
+    }
+
+    // --- AUTRES CAS (Élèves, Profs, Salles, etc.) ---
+    finalizeGeneralImport(data, type);
+}
+
+/**
+ * Appelée par les tuiles (Boutons OK/Annuler de la modale)
+ */
+window.setHGMode = function(isSplit) {
+    DB.config.splitHGEMC = isSplit;
+    document.getElementById('modalHGEMC').style.display = 'none';
+    if (tempImportData) {
+        finalizeGradesImport(tempImportData);
+    }
+};
+
+window.closeHGModal = function() {
+    document.getElementById('modalHGEMC').style.display = 'none';
+    tempImportData = null;
+};
+
+/**
+ * TRAITEMENT FINAL : NOTES
+ */
+function finalizeGradesImport(data) {
+    const row0 = data[0];
+    const kNom = findKey(row0, ['nom', 'élève', 'eleve']);
+    const kPrenom = findKey(row0, ['prénom', 'prenom']);
+    const kFr = findKey(row0, ['français', 'francais', 'fr']); 
+    const kMath = findKey(row0, ['math', 'mathématiques', 'mathematiques']); 
+    const kHG = findKey(row0, ['histoire', 'hg', 'géo', 'géographie']);
+    const kEMC = DB.config.splitHGEMC ? findKey(row0, ['emc', 'moral', 'civique']) : null;
+    const kSVT = findKey(row0, ['svt']); 
+    const kPC = findKey(row0, ['physique', 'pc']); 
+    const kTech = findKey(row0, ['techno']); 
+
+    if(!kNom) return alert("❌ Colonne 'Nom' introuvable.");
+
+    data.forEach((row, idx) => {
+        if (idx === 0 || !row[kNom]) return;
+
+        const student = DB.students.find(s => 
+            s.nom.toLowerCase().trim() === row[kNom].toString().toLowerCase().trim() &&
+            (kPrenom && row[kPrenom] ? s.prenom.toLowerCase().trim() === row[kPrenom].toString().toLowerCase().trim() : true)
+        );
+
+        if(student) {
+            student.grades = { 
+                fr: cleanNumber(row[kFr]), 
+                math: cleanNumber(row[kMath]), 
+                hg: cleanNumber(row[kHG]),
+                emc: DB.config.splitHGEMC ? cleanNumber(row[kEMC]) : null,
+                svt: cleanNumber(row[kSVT]), 
+                pc: cleanNumber(row[kPC]), 
+                tech: cleanNumber(row[kTech]) 
+            };
+        }
+    });
+
+    saveDB();
+    renderGrades();
+    alert("✅ Importation effectuée.");
+}
+
+/**
+ * TRAITEMENT FINAL : ÉLÈVES / PROFS / SALLES / SIMU
+ */
+function finalizeGeneralImport(data, type) {
+    let report = { success: 0, errors: [] };
+    const row0 = data[0];
+
+    if (type === 'students') {
         const kNom = findKey(row0, ['nom']);
         const kPrenom = findKey(row0, ['prénom', 'prenom']);
-        // Matières
-        const kFr = findKey(row0, ['français', 'francais']); 
-        const kMath = findKey(row0, ['math']); 
-        const kHG = findKey(row0, ['histoire', 'hg', 'géo']);
-        const kSVT = findKey(row0, ['svt']); 
-        const kPC = findKey(row0, ['physique', 'pc', 'phy chi', 'chimie']); 
-        const kTech = findKey(row0, ['techno']); 
-
-        if(!kNom) return alert("❌ Colonne 'Nom' introuvable dans le fichier Excel.");
+        const kClasse = findKey(row0, ['classe', 'division']);
+        const kSexe = findKey(row0, ['sexe', 'civilité', 'genre']);
+        const kMef = findKey(row0, ['mef', 'module', 'formation', 'niveau']);
+        const kAno = findKey(row0, ['anonymat', 'ano', 'code', 'numéro']);
 
         data.forEach((row, idx) => {
-            const lineNum = idx + 2; // +1 pour header, +1 pour index 0
-            if(!row[kNom]) return; // Ligne vide ignorée
-
-            // Recherche de l'élève
-            const student = DB.students.find(s => 
-                s.nom.toLowerCase() === row[kNom].toString().trim().toLowerCase() && 
-                (kPrenom ? s.prenom.toLowerCase() === row[kPrenom].toString().trim().toLowerCase() : true)
-            );
-
-            if(student) {
-                // Import sécurisé des notes
-                student.grades = { 
-                    fr: cleanNumber(row[kFr]), 
-                    math: cleanNumber(row[kMath]), 
-                    hg: cleanNumber(row[kHG]), 
-                    svt: cleanNumber(row[kSVT]), 
-                    pc: cleanNumber(row[kPC]), 
-                    tech: cleanNumber(row[kTech]) 
-                };
-                
-                // Vérification si classe fournie
-                const kClasse = findKey(row0, ['classe', 'division']);
-                if(row[kClasse]) student.classe = row[kClasse].toString().trim();
-                
-                report.success++;
-            } else {
-                addError(lineNum, `Élève inconnu "${row[kNom]} ${row[kPrenom]||''}"`);
-            }
-        });
-        renderGrades();
-    } 
-
-    // --- 2. IMPORT ÉLÈVES (AVEC MEF ET ANONYMAT) ---
-    else if (type === 'students') {
-        const kNom = findKey(data[0], ['nom']);
-        const kPrenom = findKey(data[0], ['prénom', 'prenom']);
-        const kClasse = findKey(data[0], ['classe', 'division']);
-        const kSexe = findKey(data[0], ['sexe', 'civilité', 'genre']);
-        const kMef = findKey(data[0], ['mef', 'module', 'formation', 'niveau']);
-        
-        // NOUVEAU : Détection de la colonne Anonymat
-        const kAno = findKey(data[0], ['anonymat', 'ano', 'code', 'numéro']);
-
-        if(!kNom) return alert("❌ Colonne 'Nom' introuvable.");
-
-        data.forEach((row, idx) => {
-            const lineNum = idx + 2;
-            if(row[kNom] && row[kPrenom]) {
-                let sexeRaw = kSexe ? row[kSexe] : "";
-                let sexe = "M";
-                if(sexeRaw && (sexeRaw.toString().toLowerCase().includes('f') || sexeRaw.toString().toLowerCase().includes('mme'))) sexe = "F";
-                
-                DB.students.push({ 
-                    id: Date.now() + Math.random(), 
-                    nom: row[kNom].toString().trim().toUpperCase(), 
-                    prenom: row[kPrenom].toString().trim(), 
-                    classe: row[kClasse] ? row[kClasse].toString().trim() : "Non Classé", 
-                    sexe: sexe, 
-                    mef: kMef ? (row[kMef] || "").toString().trim() : "",
-                    // NOUVEAU : On stocke l'anonymat importé
-                    anonymat: kAno ? (row[kAno] || "").toString().trim() : "",
-                    tt: false 
-                });
-                report.success++;
-            } else {
-                addError(lineNum, "Nom ou Prénom manquant");
-            }
+            if (idx === 0 || !row[kNom]) return;
+            let sexe = (kSexe && row[kSexe] && row[kSexe].toString().toLowerCase().includes('f')) ? "F" : "M";
+            DB.students.push({ 
+                id: Date.now() + Math.random(), 
+                nom: row[kNom].toString().trim().toUpperCase(), 
+                prenom: row[kPrenom] ? row[kPrenom].toString().trim() : "", 
+                classe: row[kClasse] ? row[kClasse].toString().trim() : "Non Classé", 
+                sexe: sexe, 
+                mef: kMef ? row[kMef].toString().trim() : "",
+                anonymat: kAno ? row[kAno].toString().trim() : "",
+                tt: false 
+            });
+            report.success++;
         });
         renderStudents();
-    }
-    // --- 3. IMPORT PROFS ---
+    } 
+    
     else if (type === 'teachers') {
-        const kNom = findKey(data[0], ['nom']);
-        if(!kNom) return alert("❌ Colonne 'Nom' introuvable.");
-
-        const kPrenom = findKey(data[0], ['prénom', 'prenom']);
-        // CORRECTION ICI : On rétablit la recherche de la colonne Civilité
-        const kCiv = findKey(data[0], ['civilité', 'civ', 'civilite']); 
-        const kMat = findKey(data[0], ['matière', 'discipline']);
+        const kNom = findKey(row0, ['nom']);
+        const kPrenom = findKey(row0, ['prénom', 'prenom']);
+        const kCiv = findKey(row0, ['civilité', 'civ', 'civilite']); 
+        const kMat = findKey(row0, ['matière', 'discipline']);
 
         data.forEach((row, idx) => {
-            if(row[kNom]) {
-                DB.teachers.push({ 
-                    // Si la colonne existe, on l'utilise, sinon "M." par défaut
-                    civ: kCiv ? row[kCiv] : "M.", 
-                    nom: row[kNom].toString().trim().toUpperCase(), 
-                    prenom: kPrenom ? row[kPrenom].toString().trim() : "", 
-                    matiere: kMat ? row[kMat].toString().trim() : "Divers" 
-                });
-                report.success++;
-            }
+            if (idx === 0 || !row[kNom]) return;
+            DB.teachers.push({ 
+                civ: kCiv ? row[kCiv] : "M.", 
+                nom: row[kNom].toString().trim().toUpperCase(), 
+                prenom: kPrenom ? row[kPrenom].toString().trim() : "", 
+                matiere: kMat ? row[kMat].toString().trim() : "Divers" 
+            });
+            report.success++;
         });
         renderTeachers();
     }
 
-    // --- 4. IMPORT SALLES ---
     else if (type === 'rooms') {
-        const kNom = findKey(data[0], ['nom', 'salle']);
-        const kCap = findKey(data[0], ['capacité', 'places']);
-        
-        if(!kNom) return alert("❌ Colonne 'Salle' introuvable.");
-
-        data.forEach((row) => {
-            if(row[kNom]) {
-                let cap = kCap ? parseInt(row[kCap]) : 20;
-                if(isNaN(cap)) cap = 20; // Sécurité capacité
-
-                DB.rooms.push({ 
-                    nom: row[kNom].toString().trim(), 
-                    capacite: cap, 
-                    isTT: false,
-                    isAmen: false
-                });
-                report.success++;
-            }
+        const kNom = findKey(row0, ['nom', 'salle']);
+        const kCap = findKey(row0, ['capacité', 'places']);
+        data.forEach((row, idx) => {
+            if (idx === 0 || !row[kNom]) return;
+            DB.rooms.push({ 
+                nom: row[kNom].toString().trim(), 
+                capacite: kCap ? parseInt(row[kCap]) : 20, 
+                isTT: false, isAmen: false 
+            });
+            report.success++;
         });
         renderRooms();
     }
 
-    // --- 5. IMPORT SIMULATION (ORAL / MOY GEN) ---
     else if (type === 'oral' || type === 'general') {
-        const kNom = findKey(data[0], ['nom']);
-        const kVal = type === 'oral' ? findKey(data[0], ['note', 'oral']) : findKey(data[0], ['moyenne', 'générale']);
-        
-        if(!kNom || !kVal) return alert("❌ Colonnes 'Nom' ou 'Note/Moyenne' introuvables.");
-
+        const kNom = findKey(row0, ['nom']);
+        const kVal = type === 'oral' ? findKey(row0, ['note', 'oral']) : findKey(row0, ['moyenne', 'générale']);
         data.forEach((row, idx) => {
+            if (idx === 0 || !row[kNom]) return;
             const student = DB.students.find(s => s.nom.toLowerCase() === row[kNom].toString().trim().toLowerCase());
             if(student) {
                 if(!student.grades) student.grades = {};
                 let val = cleanNumber(row[kVal]);
-                
                 if(type === 'oral') student.grades.oral = val;
                 else student.grades.genAvg = val;
-                
                 report.success++;
-            } else {
-                addError(idx+2, `Élève inconnu pour simulation: ${row[kNom]}`);
             }
         });
         renderSimulation();
     }
 
-    // --- RAPPORT FINAL ---
-    let msg = `✅ ${report.success} éléments importés avec succès.`;
-    if(report.errors.length > 0) {
-        msg += `\n\n⚠️ ATTENTION : ${report.errors.length} anomalies détectées :\n`;
-        msg += report.errors.join("\n");
-        msg += `\n\n(Vérifiez l'orthographe des noms ou le format des notes)`;
-    }
-    alert(msg);
+    saveDB();
+    alert(`✅ Importation terminée : ${report.success} éléments ajoutés.`);
 }
+
 // --- FIN DU REMPLACEMENT ---
 
     function renderGrades() {
-        const tbody = document.querySelector('#tableGradesPreview tbody'); tbody.innerHTML = '';
-        const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
-        const filterVal = document.getElementById('filterClassGrades') ? document.getElementById('filterClassGrades').value : "all";
-        const uniqueClasses = [...new Set(DB.students.map(s => s.classe).filter(c => c))].sort();
-        const select = document.getElementById('filterClassGrades');
-        if(select && select.options.length === 1 && uniqueClasses.length > 0) { uniqueClasses.forEach(c => { let opt = document.createElement('option'); opt.value = c; opt.text = c; select.appendChild(opt); }); }
-        let displayList = DB.students.map(s => {
-            if(!s.grades) return null;
-            if(filterVal !== "all" && s.classe !== filterVal) return null;
-            let sumSci = 0, countSci = 0;
-            if(activeSciences.includes('SVT') && s.grades.svt !== null) { sumSci += s.grades.svt; countSci++; }
-            if(activeSciences.includes('PC') && s.grades.pc !== null) { sumSci += s.grades.pc; countSci++; }
-            if(activeSciences.includes('TECH') && s.grades.tech !== null) { sumSci += s.grades.tech; countSci++; }
-            const moySci = countSci > 0 ? (sumSci / countSci) : null;
-            let sumGen = 0, countGen = 0;
-            if(s.grades.fr !== null) { sumGen += s.grades.fr; countGen++; }
-            if(s.grades.math !== null) { sumGen += s.grades.math; countGen++; }
-            if(s.grades.hg !== null) { sumGen += s.grades.hg; countGen++; }
-            if(moySci !== null) { sumGen += moySci; countGen++; }
-            const moyDNB = countGen > 0 ? (sumGen / countGen) : null;
-            return { ...s, moySciVal: moySci, moyDNBVal: moyDNB };
-        }).filter(s => s !== null);
-        const k = gradeSortState.key; const o = gradeSortState.order === 'asc' ? 1 : -1;
-        displayList.sort((a,b) => { let valA, valB; if(k === 'nom') { valA = a.nom; valB = b.nom; } else if(k === 'moyDNB') { valA = a.moyDNBVal || -1; valB = b.moyDNBVal || -1; } else { valA = a.grades[k] || -1; valB = b.grades[k] || -1; } if(valA < valB) return -1 * o; if(valA > valB) return 1 * o; return 0; });
-        const totalCount = displayList.length;
-        if(filterVal === 'all' && displayList.length > 30) { displayList = displayList.slice(0, 30); document.getElementById('gradeCountLabel').innerText = `Affichage: 30 / ${totalCount} élèves (Utilisez le filtre pour tout voir)`; } else { document.getElementById('gradeCountLabel').innerText = `${totalCount} élèves affichés`; }
-        displayList.forEach(s => { const ms = s.moySciVal !== null ? s.moySciVal.toFixed(2) : "-"; const md = s.moyDNBVal !== null ? s.moyDNBVal.toFixed(2) : "-"; tbody.innerHTML += `<tr><td>${s.nom} ${s.prenom}</td><td>${s.classe || ""}</td><td style="background:#e8f8f5; font-weight:bold; color:#145a32;">${md}</td><td>${s.grades.fr || "-"}</td><td>${s.grades.math || "-"}</td><td>${s.grades.hg || "-"}</td><td>${s.grades.svt || "-"}</td><td>${s.grades.pc || "-"}</td><td>${s.grades.tech || "-"}</td><td style="background:#eaf2f8; font-weight:bold;">${ms}</td></tr>`; });
-    }
+    const tbody = document.querySelector('#tableGradesPreview tbody');
+    const thead = document.querySelector('#tableGradesPreview thead');
+    const filterClass = document.getElementById('filterClassGrades').value;
+    if (!tbody || !thead) return;
+
+    // 1. Gestion de l'en-tête dynamique
+    // On ajoute les colonnes HG et EMC AVANT la colonne HG-EMC globale si on est en mode split
+    let hgSpecificHeaders = DB.config.splitHGEMC 
+        ? `<th class="sortable" onclick="sortGrades('hg')">HG  ▼</th><th class="sortable" onclick="sortGrades('emc')">EMC  ▼</th>`
+        : '';
+
+    thead.innerHTML = `
+        <tr style="background:#f9f9f9; position:sticky; top:0;">
+            <th class="sortable" onclick="sortGrades('nom')">Elève ▼</th>
+            <th class="sortable" onclick="sortGrades('classe')">Classe ▼</th>
+            <th class="sortable" onclick="sortGrades('moyDNB')" style="background:#e8f8f5;">Moy. DNB Blanc ▼</th>
+            <th class="sortable" onclick="sortGrades('fr')">Français ▼</th>
+            <th class="sortable" onclick="sortGrades('math')">Maths ▼</th>
+            ${hgSpecificHeaders}
+            <th class="sortable" onclick="sortGrades('hgemc_global')" style="background:#fcf3cf;">HG-EMC  ▼</th>
+            <th class="sortable" onclick="sortGrades('svt')">SVT ▼</th>
+            <th class="sortable" onclick="sortGrades('pc')">Phys-Chi ▼</th>
+            <th class="sortable" onclick="sortGrades('tech')">Techno ▼</th>
+            <th class="sortable" onclick="sortGrades('moySci')" style="background:#eaf2f8;">Moy. Sci. ▼</th>
+        </tr>`;
+
+    // 2. Remplissage des données
+    tbody.innerHTML = '';
+    const filteredStudents = DB.students.filter(s => filterClass === 'all' || s.classe === filterClass);
+
+    filteredStudents.forEach(s => {
+        const g = s.grades || {};
+        
+        // Calcul des blocs
+        const noteHGCalcul = getNoteHGEMC(s); 
+        
+        let sc = 0, c = 0;
+        if(g.svt != null) { sc += g.svt; c++; }
+        if(g.pc != null) { sc += g.pc; c++; }
+        if(g.tech != null) { sc += g.tech; c++; }
+        const moySci = c > 0 ? (sc / c).toFixed(1) : '-';
+
+        // Moyenne DNB (Moyenne des 4 blocs sur 20)
+        const gradesList = [g.fr, g.math, noteHGCalcul, c > 0 ? parseFloat(moySci) : null].filter(v => v !== null);
+        const moyDNB = gradesList.length > 0 ? (gradesList.reduce((a, b) => a + b, 0) / gradesList.length).toFixed(1) : '-';
+
+        // Cellules de données HG / EMC si mode split
+        let hgSpecificCells = DB.config.splitHGEMC 
+            ? `<td>${g.hg ?? '-'}</td><td>${g.emc ?? '-'}</td>`
+            : '';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><b>${s.nom}</b> ${s.prenom}</td>
+            <td>${s.classe}</td>
+            <td style="background:#e8f8f5; font-weight:bold;">${moyDNB}</td>
+            <td>${g.fr ?? '-'}</td>
+            <td>${g.math ?? '-'}</td>
+            ${hgSpecificCells}
+            <td style="background:#fcf3cf; font-weight:bold;">${noteHGCalcul !== null ? noteHGCalcul.toFixed(1) : '-'}</td>
+            <td>${g.svt ?? '-'}</td>
+            <td>${g.pc ?? '-'}</td>
+            <td>${g.tech ?? '-'}</td>
+            <td style="background:#eaf2f8;">${moySci}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
     function sortGrades(key) { if(gradeSortState.key === key) { gradeSortState.order = gradeSortState.order === 'asc' ? 'desc' : 'asc'; } else { gradeSortState.key = key; gradeSortState.order = 'desc'; } renderGrades(); }
 
     function filterSimulation(val) { simulSearchTerm = val.toLowerCase(); renderSimulation(); }
     
     function renderSimulation() {
-        const tbody = document.querySelector('#tableSimulation tbody'); tbody.innerHTML = '';
-        const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
+    const container = document.getElementById('simulation-list');
+    if (!container) return;
+
+    let html = `
+    <table class="table table-hover">
+        <thead class="table-primary">
+            <tr>
+                <th>Élève</th>
+                <th>Écrits (/400)</th>
+                <th>Oral (/100)</th>
+                <th>Socle (/400)</th>
+                <th>Total DNB (/800)</th>
+                <th>Mention</th>
+            </tr>
+        </thead><tbody>`;
+
+    DB.students.forEach(s => {
+        const g = s.grades || {};
+        const noteBlocHG = getNoteHGEMC(s); // On appelle notre fonction de calcul
         
-        let list = DB.students.map(s => {
-            if(!s.grades) return null;
-            if(simulSearchTerm && !s.nom.toLowerCase().includes(simulSearchTerm) && !s.prenom.toLowerCase().includes(simulSearchTerm)) return null;
-            
-            // 1. Calcul Moyenne Sciences
-            let sumSci = 0, countSci = 0;
-            if(activeSciences.includes('SVT') && s.grades.svt !== null) { sumSci += s.grades.svt; countSci++; }
-            if(activeSciences.includes('PC') && s.grades.pc !== null) { sumSci += s.grades.pc; countSci++; }
-            if(activeSciences.includes('TECH') && s.grades.tech !== null) { sumSci += s.grades.tech; countSci++; }
-            const moySci = countSci > 0 ? (sumSci / countSci) : null;
-            
-            // 2. Calcul Somme Écrits
-            let sumEcrit = 0, countEcrit = 0;
-            if(s.grades.fr !== null) { sumEcrit += s.grades.fr; countEcrit++; }
-            if(s.grades.math !== null) { sumEcrit += s.grades.math; countEcrit++; }
-            if(s.grades.hg !== null) { sumEcrit += s.grades.hg; countEcrit++; }
-            if(moySci !== null) { sumEcrit += moySci; countEcrit++; }
-            
-            const moyEcritsVal = countEcrit > 0 ? (sumEcrit / countEcrit) : 0;
+        const totalEcrits = (parseFloat(g.fr) || 0) + 
+                            (parseFloat(g.math) || 0) + 
+                            (parseFloat(g.sciences) || 0) + 
+                            noteBlocHG;
+                            
+        const totalEpreuves = totalEcrits + (parseFloat(g.oral) || 0);
+        const pointsSocle = parseFloat(g.genAvg) || 0;
+        const totalFinal = totalEpreuves + pointsSocle;
 
-            // 3. Calcul Moyenne Épreuves (Écrits + Oral)
-            // CORRECTION ICI : on ne multiplie plus par countEcrit
-            let sumEpreuves = sumEcrit; 
-            let countEpreuves = countEcrit;
+        let mention = "Ajourné";
+        let color = "danger";
+        if (totalFinal >= 400) { mention = "Admis"; color = "success"; }
+        if (totalFinal >= 480) { mention = "Assez Bien"; color = "info"; }
+        if (totalFinal >= 560) { mention = "Bien"; color = "primary"; }
+        if (totalFinal >= 640) { mention = "Très Bien"; color = "warning"; }
 
-            if(s.grades.oral !== null && s.grades.oral !== undefined) { 
-                sumEpreuves += s.grades.oral; 
-                countEpreuves++; 
-            }
-            const moyEpreuves = countEpreuves > 0 ? (sumEpreuves / countEpreuves) : 0;
+        html += `
+        <tr>
+            <td>${s.nom} ${s.prenom}</td>
+            <td>${totalEcrits.toFixed(1)}</td>
+            <td>${g.oral || 0}</td>
+            <td>${pointsSocle}</td>
+            <td class="fw-bold text-${color === 'warning' ? 'dark' : 'white'} bg-${color}">${totalFinal.toFixed(1)}</td>
+            <td><span class="badge bg-${color}">${mention}</span></td>
+        </tr>`;
+    });
 
-            // 4. Calcul Moyenne DNB (60% Épreuves / 40% Contrôle Continu)
-            const moyGen = (s.grades.genAvg !== null) ? s.grades.genAvg : 0;
-            let finalAvg = 0;
-            if(moyGen > 0 && moyEpreuves > 0) finalAvg = (moyGen * 0.4) + (moyEpreuves * 0.6);
-            else if (moyEpreuves > 0) finalAvg = moyEpreuves;
-            else if (moyGen > 0) finalAvg = moyGen;
-            
-            let mention = "Refusé";
-            if(finalAvg >= 10) mention = "Admis"; 
-            if(finalAvg >= 12) mention = "Assez Bien"; 
-            if(finalAvg >= 14) mention = "Bien"; 
-            if(finalAvg >= 16) mention = "Très Bien"; 
-            if(finalAvg >= 18) mention = "TB (Félicitations)";
-            
-            return { ...s, moyEcritsVal, moyEpreuves, moyGen, finalAvg, mention };
-        }).filter(s => s !== null);
-
-        // Tri et Affichage
-        const k = simulSortState.key; const o = simulSortState.order === 'asc' ? 1 : -1;
-        list.sort((a,b) => {
-            let valA, valB;
-            if(k === 'nom') { valA = a.nom; valB = b.nom; }
-            else if(k === 'classe') { valA = a.classe; valB = b.classe; }
-            else if(k === 'moyEcrit') { valA = a.moyEcritsVal; valB = b.moyEcritsVal; }
-            else if(k === 'oral') { valA = a.grades.oral || -1; valB = b.grades.oral || -1; }
-            else if(k === 'moyEpreuve') { valA = a.moyEpreuves; valB = b.moyEpreuves; }
-            else if(k === 'moyGen') { valA = a.moyGen; valB = b.moyGen; }
-            else if(k === 'final') { valA = a.finalAvg; valB = b.finalAvg; }
-            if(valA < valB) return -1 * o; if(valA > valB) return 1 * o; return 0;
-        });
-
-        list.forEach(s => {
-            let color = "#e74c3c";
-            if(s.finalAvg >= 10) color = "#27ae60"; 
-            if(s.finalAvg >= 12) color = "#f39c12"; 
-            if(s.finalAvg >= 14) color = "#3498db"; 
-            if(s.finalAvg >= 16) color = "#8e44ad"; 
-            if(s.finalAvg >= 18) color = "#d35400";
-            
-            tbody.innerHTML += `<tr>
-                <td>${s.nom} ${s.prenom}</td>
-                <td>${s.classe || ""}</td>
-                <td style="text-align:center">${s.moyEcritsVal.toFixed(2)}</td>
-                <td style="text-align:center">${s.grades.oral !== undefined && s.grades.oral !== null ? s.grades.oral : "-"}</td>
-                <td style="text-align:center; font-weight:bold; color:#555;">${s.moyEpreuves.toFixed(2)}</td>
-                <td style="text-align:center">${s.grades.genAvg !== undefined && s.grades.genAvg !== null ? s.grades.genAvg : "-"}</td>
-                <td style="background:#eaf2f8; text-align:center; font-weight:bold; font-size:1.1em;">${s.finalAvg.toFixed(2)} / 20</td>
-                <td style="text-align:center; font-weight:bold; color:${color}">${s.mention}</td>
-            </tr>`;
-        });
-    }
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+}
 
     function sortSimulation(key) {
         if(simulSortState.key === key) { simulSortState.order = simulSortState.order === 'asc' ? 'desc' : 'asc'; } 
@@ -1673,99 +1727,105 @@ function processExcelData(data, type) {
 
     // 4. RELEVÉS DE NOTES (Corrigé, Complet avec Calculs)
 window.exportRelevesNotes = function(sortMode, targetId) {
-    DB.config.schoolName = document.getElementById('schoolName').value; 
-    DB.config.year = document.getElementById('sessionYear').value;
-    const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
-    const { jsPDF } = window.jspdf; 
-    const doc = new jsPDF('p', 'mm', 'a4'); 
-    let count = 0;
-    
-    let studentsToPrint = []; 
-    if(targetId && targetId !== 'all') { 
-        studentsToPrint = DB.students.filter(s => s.id == targetId); 
-    } else { 
-        studentsToPrint = [...DB.students]; 
-    }
-    
-    // Tri
-    studentsToPrint.sort((a,b) => { 
-        if(sortMode === 'class') { 
-            if(a.classe < b.classe) return -1; 
-            if(a.classe > b.classe) return 1; 
-        } 
-        return a.nom.localeCompare(b.nom); 
-    });
-
-    studentsToPrint.forEach((student, idx) => {
-        if(!student.grades) student.grades = {fr:null, math:null, hg:null, svt:null, pc:null, tech:null}; 
-        if(count > 0) doc.addPage(); count++;
+        DB.config.schoolName = document.getElementById('schoolName').value; 
+        DB.config.year = document.getElementById('sessionYear').value;
+        const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
+        const { jsPDF } = window.jspdf; 
+        const doc = new jsPDF('p', 'mm', 'a4'); 
+        let count = 0;
         
-        // --- LOGO ---
-        addSmartLogo(doc, 15, 10, 45);
-
-        doc.setFontSize(10); doc.setTextColor(100); 
-        doc.text("DNB BLANC", 195, 15, {align:'right'}); 
-        doc.text(`Session ${DB.config.year}`, 195, 20, {align:'right'});
+        let studentsToPrint = (targetId && targetId !== 'all') 
+            ? DB.students.filter(s => s.id == targetId) 
+            : [...DB.students];
         
-        doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); 
-        doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'}); 
-        doc.setFontSize(18); doc.setTextColor(0); doc.text("RELEVÉ DE NOTES", 105, 35, {align:'center'});
-        
-        doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5); 
-        doc.rect(15, 45, 180, 20, 'FD'); 
-        
-        doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); 
-        const fullName = `${student.nom} ${student.prenom}`; 
-        doc.text(`Candidat(e) :  ${fullName}`, 20, 53); 
-        doc.text(`Classe :  ${student.classe}`, 150, 53);
-        
-        if(student.tt) { 
-            doc.setFontSize(10); doc.setTextColor(100); 
-            doc.text("(Bénéficie d'un Tiers-Temps)", 20, 60); 
-        }
-        
-        // --- CALCULS (CRITIQUE : RE-AJOUTÉ) ---
-        const getRaw = (v) => (v !== null && v !== undefined && v !== "") ? parseFloat(v) : null;
-        let sumSci=0, cSci=0; let details=[];
-        
-        if(activeSciences.includes('SVT')){ if(getRaw(student.grades.svt)!=null){sumSci+=getRaw(student.grades.svt);cSci++} details.push("SVT"); }
-        if(activeSciences.includes('PC')){ if(getRaw(student.grades.pc)!=null){sumSci+=getRaw(student.grades.pc);cSci++} details.push("PC"); }
-        if(activeSciences.includes('TECH')){ if(getRaw(student.grades.tech)!=null){sumSci+=getRaw(student.grades.tech);cSci++} details.push("Tech"); }
-        const moySci = cSci>0 ? (sumSci/cSci) : null;
-
-        const getNote = (v) => (v !== null && v !== undefined && v !== "") ? parseFloat(v).toFixed(1) : "Abs";
-        
-        const body = [ 
-            ["Français", getNote(student.grades.fr) + " / 20"], 
-            ["Mathématiques", getNote(student.grades.math) + " / 20"], 
-            ["Hist-Géo / EMC", getNote(student.grades.hg) + " / 20"], 
-            [`Sciences (${details.join('+')})`, moySci !== null ? moySci.toFixed(1) + " / 20" : "Abs"] 
-        ];
-        
-        doc.autoTable({ 
-            head: [['Épreuves Écrites', 'Note Obtenue']], 
-            body: body, 
-            startY: 80, 
-            theme: 'grid', 
-            headStyles: { fillColor: [44,62,80], halign:'left' } 
+        studentsToPrint.sort((a,b) => { 
+            if(sortMode === 'class') { 
+                if(a.classe < b.classe) return -1; 
+                if(a.classe > b.classe) return 1; 
+            } 
+            return a.nom.localeCompare(b.nom); 
         });
-        
-        let finalY = doc.lastAutoTable.finalY + 30; if(finalY > 250) { doc.addPage(); finalY = 40; }
-        doc.setFontSize(11); doc.text(`Fait à ${DB.config.city || "SJI"}, le ${new Date().toLocaleDateString()}`, 130, finalY, {align:'center'});            
-        doc.setFont("helvetica","bold"); doc.text(DB.config.director.civ || "Le Chef", 130, finalY + 5, {align:'center'}); 
-        doc.text(DB.config.director.name || "", 130, finalY + 10, {align:'center'});
-        
-        if(DB.config.signature) { 
-            try { 
-                const imgProps = doc.getImageProperties(DB.config.signature); 
-                const ratio = imgProps.width / imgProps.height; 
-                doc.addImage(DB.config.signature, 'PNG', 110, finalY + 15, 20*ratio, 20); 
-            } catch(e) {} 
-        }
-    });
-    
-    doc.save("Releves_Notes.pdf");
-};
+
+        studentsToPrint.forEach((student) => {
+            if(!student.grades) student.grades = {}; 
+            if(count > 0) doc.addPage(); count++;
+            
+            if (DB.config.logo) addSmartLogo(doc, 15, 10, 40);
+
+            doc.setFontSize(10); doc.setTextColor(100); 
+            doc.text("DNB BLANC", 195, 15, {align:'right'}); 
+            doc.text(`Session ${DB.config.year}`, 195, 20, {align:'right'});
+            
+            doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); 
+            doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'}); 
+            doc.setFontSize(18); doc.setTextColor(0); doc.text("RELEVÉ DE NOTES", 105, 35, {align:'center'});
+            
+            doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5); 
+            doc.rect(15, 75, 180, 20, 'FD'); 
+            doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); 
+            doc.text(`Candidat(e) : ${student.nom} ${student.prenom}`, 20, 83); 
+            doc.text(`Classe : ${student.classe}`, 150, 83); 
+            
+            // Fonctions de formatage pour éviter "undefined" et ajouter /20
+            const getRaw = (v) => (v !== null && v !== undefined && v !== "") ? parseFloat(v) : null;
+            const fmt = (v) => {
+                let val = getRaw(v);
+                return (val !== null) ? val.toFixed(1) + " / 20" : "-";
+            };
+            
+            // --- SCIENCES ---
+            let sumSci=0, cSci=0; let detSci=[];
+            if(activeSciences.includes('SVT')){ 
+                let v = getRaw(student.grades.svt); if(v!==null){ sumSci+=v; cSci++; }
+                detSci.push(`SVT: ${fmt(student.grades.svt)}`); 
+            }
+            if(activeSciences.includes('PC')){ 
+                let v = getRaw(student.grades.pc); if(v!==null){ sumSci+=v; cSci++; }
+                detSci.push(`PC: ${fmt(student.grades.pc)}`); 
+            }
+            if(activeSciences.includes('TECH')){ 
+                let v = getRaw(student.grades.tech); if(v!==null){ sumSci+=v; cSci++; }
+                detSci.push(`Techno: ${fmt(student.grades.tech)}`); 
+            }
+            const noteSci20 = cSci > 0 ? (sumSci / cSci).toFixed(1) : "Abs";
+
+            // --- HG-EMC ---
+            const noteHG20_raw = getNoteHGEMC(student);
+            const noteHG20 = noteHG20_raw !== null ? noteHG20_raw.toFixed(1) : "Abs";
+            let detHG = "Épreuve unique";
+            if(DB.config.splitHGEMC) {
+                detHG = `HG: ${fmt(student.grades.hg)} | EMC: ${fmt(student.grades.emc)}`;
+            }
+
+            const body = [ 
+                ["Français", (getRaw(student.grades.fr) !== null ? getRaw(student.grades.fr).toFixed(1) + " / 20" : "Abs"), "Épreuve unique"], 
+                ["Mathématiques", (getRaw(student.grades.math) !== null ? getRaw(student.grades.math).toFixed(1) + " / 20" : "Abs"), "Épreuve unique"], 
+                ["Hist-Géo / EMC", (noteHG20 !== "Abs" ? noteHG20 + " / 20" : "Abs"), detHG], 
+                ["Sciences", (noteSci20 !== "Abs" ? noteSci20 + " / 20" : "Abs"), detSci.join(' | ')] 
+            ];
+            
+            doc.autoTable({ 
+                head: [['Épreuves', 'Note', 'Détail des notes']], 
+                body: body, 
+                startY: 105, 
+                theme: 'grid', 
+                headStyles: { fillColor: [44,62,80] },
+                columnStyles: { 
+                    1: { halign: 'center', fontStyle: 'bold', cellWidth: 40 }, 
+                    2: { fontSize: 9, cellWidth: 'auto' } 
+                }
+            });
+            
+            let finalY = doc.lastAutoTable.finalY + 25; 
+            if(finalY > 250) { doc.addPage(); finalY = 40; }
+            doc.setFontSize(11); doc.text(`Fait à ${DB.config.city || ""}, le ${new Date().toLocaleDateString()}`, 130, finalY, {align:'center'});            
+            doc.setFont("helvetica","bold"); doc.text(DB.config.director.civ || "Le Chef d'Établissement", 130, finalY + 5, {align:'center'}); 
+            doc.text(DB.config.director.name || "", 130, finalY + 10, {align:'center'});
+            
+            if(DB.config.signature) { try { doc.addImage(DB.config.signature, 'PNG', 110, finalY + 15, 40, 20); } catch(e) {} }
+        });
+        doc.save("Releves_Notes_DNB_Blanc.pdf");
+    };
 
     // --- FONCTION D'AFFICHAGE AVEC FILTRES ET MEF ---
 window.renderStudents = function() { 
@@ -2486,87 +2546,7 @@ window.exportConvocationStudents = function(targetId = null) {
 };
 
 
-// 3. CONVOCATIONS PROFS (Corrigé & Complet)
-window.exportConvocationTeachers = function() {
-    DB.config.schoolName = document.getElementById('schoolName').value;
-    DB.config.year = document.getElementById('sessionYear').value;
-    if (!DB.config.director) DB.config.director = { civ: "M. le Principal", name: "" };
-    
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('p', 'mm', 'a4');
-    let count = 0;
-    
-    DB.teachers.forEach(teacher => {
-        const fullName = `${teacher.nom} ${teacher.prenom}`;
-        let duties = [];
-        
-        for (const [key, assignedName] of Object.entries(DB.planning)) {
-            if (assignedName !== fullName) continue;
-            const parts = key.split('_');
-            if (parts.length < 5) continue; 
-            const examIdx = parseInt(parts[0]);
-            const roomName = parts[1];
-            const type = parts[2];
-            const slotIdx = parseInt(parts[3]);
-            const exam = DB.exams[examIdx];
-            let slot = { start: "??", end: "??" };
-            if(exam.slots && exam.slots[type] && exam.slots[type][slotIdx]) {
-                slot = exam.slots[type][slotIdx];
-            } else {
-                 slot = { start: type==='tt'? (exam.timeTT||exam.time):exam.time, end: "..." };
-            }
-            duties.push({ date: exam.date, start: slot.start, end: slot.end, name: exam.name, room: roomName, isTT: (type === 'tt') });
-        }
 
-        if(duties.length === 0) return;
-        if(count > 0) doc.addPage(); count++;
-
-        addSmartLogo(doc, 15, 10, 45);
-        doc.setFontSize(10); doc.setTextColor(100); doc.text("DNB BLANC", 195, 12, {align:'right'}); doc.text(`Session ${DB.config.year}`, 195, 17, {align:'right'});
-        doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'});
-        doc.setFontSize(18); doc.setTextColor(0); doc.text("CONVOCATION SURVEILLANCE", 105, 40, {align:'center'});
-
-        doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.rect(15, 50, 180, 20, 'FD');
-        doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); doc.text(`${teacher.civ || ""} ${fullName}`, 20, 62);
-        
-        doc.setFontSize(11); doc.setFont("helvetica","normal"); doc.text("Planning de vos créneaux de surveillance :", 15, 85);
-
-        duties.sort((a,b) => {
-            const dateComp = a.date.localeCompare(b.date);
-            if(dateComp !== 0) return dateComp;
-            return a.start.localeCompare(b.start);
-        });
-
-        let body = duties.map(d => {
-            // --- CORRECTIF DATE : ON FORCE MIDI ---
-            const dateObj = new Date(d.date + "T12:00:00");
-            const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' });
-            // ------------------------------------
-            return [ dateStr, `${d.start} - ${d.end}`, d.name + (d.isTT ? " (TT)" : ""), d.room ];
-        });
-
-        doc.autoTable({
-            head: [['Date', 'Créneau', 'Épreuve', 'Salle']], body: body, startY: 90, theme: 'grid',
-            headStyles: { fillColor: [44,62,80] }, styles: { cellPadding: 3, valign: 'middle', fontSize: 10 },
-            columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35, fontStyle:'bold' }, 3: { cellWidth: 25, halign:'center' } }
-        });
-
-        let finalY = doc.lastAutoTable.finalY + 30;
-        if(finalY > 250) { doc.addPage(); finalY = 40; }
-        doc.setFontSize(11); doc.text(`Fait à ${DB.config.city || "SJI"}, le ${new Date().toLocaleDateString()}`, 140, finalY, {align:'center'});            
-        doc.setFont("helvetica","bold"); doc.text(DB.config.director.civ || "Le Chef", 140, finalY + 5, {align:'center'});
-        doc.text(DB.config.director.name || "", 140, finalY + 10, {align:'center'});
-        if(DB.config.signature) { 
-             try {
-                const imgProps = doc.getImageProperties(DB.config.signature);
-                const ratio = imgProps.width / imgProps.height;
-                doc.addImage(DB.config.signature, 'PNG', 120, finalY + 15, 20*ratio, 20);
-            } catch(e) {}
-        }
-    });
-
-    doc.save("Convocations_Profs_Details.pdf");
-};
 
 /**
  * Ouvre le menu de sélection pour l'anonymat avec un design moderne
@@ -3708,7 +3688,7 @@ function checkSaveStatus() {
                 <h4>${cls}</h4>
                 <div class="stat-row"><span>🖍️ Français :</span> <b>${stats.fr.moy} / 20</b></div>
                 <div class="stat-row"><span>🔢 Maths :</span> <b>${stats.math.moy} / 20</b></div>
-                <div class="stat-row"><span>🏛️ Hist-Géo :</span> <b>${stats.hg.moy} / 20</b></div>
+                <div class="stat-row"><span>🏛️ HG EMC :</span> <b>${stats.hg.moy} / 20</b></div>
                 <div class="stat-row"><span>🧪 Sciences :</span> <b>${stats.sci.moy} / 20</b></div>
                 <div class="stat-footer">
                     🎓 Moyenne : ${stats.moy20.moy} / 20
@@ -3722,7 +3702,7 @@ function checkSaveStatus() {
             <div class="chart-grid">
                 <div class="chart-box"><div class="chart-header">🖍️ Français (Répartition)</div><div class="chart-container"><canvas id="chartFr"></canvas></div></div>
                 <div class="chart-box"><div class="chart-header">🔢 Mathématiques (Répartition)</div><div class="chart-container"><canvas id="chartMath"></canvas></div></div>
-                <div class="chart-box"><div class="chart-header">🏛️ Hist-Géo (Répartition)</div><div class="chart-container"><canvas id="chartHg"></canvas></div></div>
+                <div class="chart-box"><div class="chart-header">🏛️ HG EMC (Répartition)</div><div class="chart-container"><canvas id="chartHg"></canvas></div></div>
                 <div class="chart-box"><div class="chart-header">🧪 Sciences (Répartition)</div><div class="chart-container"><canvas id="chartSci"></canvas></div></div>
             </div>
         `;
@@ -3740,7 +3720,7 @@ function checkSaveStatus() {
                             <th colspan="5" style="text-align:center; background:#e8f6f3;">Total Points / Moyenne</th>
                             <th colspan="5" style="text-align:center; background:#fef9e7;">Français</th>
                             <th colspan="5" style="text-align:center; background:#fef9e7;">Maths</th>
-                            <th colspan="5" style="text-align:center; background:#fef9e7;">Hist-Géo</th>
+                            <th colspan="5" style="text-align:center; background:#fef9e7;">HG EMC</th>
                             <th colspan="5" style="text-align:center; background:#fef9e7;">Sciences</th>
                         </tr>
                         <tr style="font-size:0.8rem">
@@ -3834,23 +3814,31 @@ function checkSaveStatus() {
     }
 
     // EXPORT PDF DATAVIS (Thème Bleu)
+    // EXPORT PDF DATAVIS (Thème Bleu) - Version Corrigée pour le positionnement du logo
     function exportDatavisPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.width;
 
+        // 1. Placement du Logo
         addSmartLogo(doc, 10, 10, 40);
-        doc.setFontSize(16); doc.text("Rapport Statistique DNB Blanc", pageWidth/2, 20, {align:'center'});
-        doc.setFontSize(12); doc.text("Session " + DB.config.year, pageWidth/2, 28, {align:'center'});
 
-        let yPos = 40;
+        // 2. Ajustement des titres pour ne pas chevaucher le logo (on descend de 20/28 à 25/33)
+        doc.setFontSize(16); 
+        doc.text("Rapport Statistique DNB Blanc", pageWidth/2, 25, {align:'center'});
+        doc.setFontSize(12); 
+        doc.text("Session " + DB.config.year, pageWidth/2, 33, {align:'center'});
+
+        // 3. Position de départ du contenu (yPos)
+        // Augmenté à 60 (au lieu de 40) pour laisser le logo respirer
+        let yPos = 60;
 
         // --- 1. TUILES ---
         const stats = calculateStats(DB.students);
         
         doc.setFontSize(14); doc.setTextColor(41, 128, 185); // Bleu
         doc.text("1. Synthèse des résultats (Moyennes Globales)", 14, yPos);
-        yPos += 10;
+        yPos += 12;
 
         doc.setFontSize(11); doc.setTextColor(0);
         const leftX = 20; const rightX = 110;
@@ -3863,14 +3851,14 @@ function checkSaveStatus() {
         doc.text(`• Français : ${stats.fr.moy} / 20`, leftX, yPos);
         doc.text(`• Mathématiques : ${stats.math.moy} / 20`, rightX, yPos);
         yPos += 6;
-        doc.text(`• Hist-Géo : ${stats.hg.moy} / 20`, leftX, yPos);
+        doc.text(`• HG EMC : ${stats.hg.moy} / 20`, leftX, yPos);
         doc.text(`• Sciences : ${stats.sci.moy} / 20`, rightX, yPos);
 
         yPos += 15;
 
         // --- 2. GRAPHIQUES ---
         const chartsIds = ['chartFr', 'chartMath', 'chartHg', 'chartSci'];
-        const chartTitles = ['Français', 'Maths', 'Hist-Géo', 'Sciences'];
+        const chartTitles = ['Français', 'Maths', 'HG EMC', 'Sciences'];
         
         const firstCanvas = document.getElementById(chartsIds[0]);
         if(firstCanvas && firstCanvas.width > 0) {
@@ -3914,16 +3902,17 @@ function checkSaveStatus() {
         });
 
         doc.autoTable({
-            head: [['Groupe', 'Moy. Générale', 'Français', 'Maths', 'Hist-Géo', 'Sciences']],
+            head: [['Groupe', 'Moy. Générale', 'Français', 'Maths', 'HG EMC', 'Sciences']],
             body: body,
             startY: yPos,
             theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185] }, // En-tête Bleu
+            headStyles: { fillColor: [41, 128, 185] }, 
             styles: { halign: 'center' },
             columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } }
         });
         doc.save("Rapport_Statistiques.pdf");
     }
+	
 function exportSimulationXLSX() {
         // 1. On vérifie qu'il y a des données
         if (DB.students.length === 0) return alert("Aucun élève à exporter.");
@@ -4088,7 +4077,7 @@ function exportDatavisXLSX() {
         // 1. Préparation des colonnes
         // On crée un tableau avec une ligne d'en-tête
         const data = [
-            ["Groupe", "Effectif", "Moyenne Générale /20", "Français /20", "Maths /20", "Hist-Géo /20", "Sciences /20"]
+            ["Groupe", "Effectif", "Moyenne Générale /20", "Français /20", "Maths /20", "HG EMC /20", "Sciences /20"]
         ];
 
         // 2. Définition des groupes à analyser
@@ -4121,7 +4110,7 @@ function exportDatavisXLSX() {
                     parseFloat(stats.moy20.moy), // Moyenne Générale
                     parseFloat(stats.fr.moy),    // Français
                     parseFloat(stats.math.moy),  // Maths
-                    parseFloat(stats.hg.moy),    // Hist-Géo
+                    parseFloat(stats.hg.moy),    // HG EMC
                     parseFloat(stats.sci.moy)    // Sciences
                 ]);
             } else {
@@ -4140,7 +4129,7 @@ function exportDatavisXLSX() {
             {wch: 20}, // Largeur Moyenne Gen
             {wch: 15}, // Largeur Fr
             {wch: 15}, // Largeur Math
-            {wch: 15}, // Largeur HG
+            {wch: 15}, // Largeur HG EMC
             {wch: 15}  // Largeur Sci
         ];
 
@@ -4903,125 +4892,108 @@ window.exportConvocationTeachers = function() {
     DB.config.year = document.getElementById('sessionYear').value;
     if (!DB.config.director) DB.config.director = { civ: "M. le Principal", name: "" };
     
+    const textAreaEl = document.getElementById('txtConvocProfsInfo');
+    const notePourProfs = textAreaEl ? textAreaEl.value.trim() : "";
+    
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4');
     let count = 0;
     
-    // On boucle sur chaque professeur
     DB.teachers.forEach(teacher => {
         const fullName = `${teacher.nom} ${teacher.prenom}`;
         let duties = [];
         
-        // Scan exhaustif de TOUTES les clés du planning
-        // Structure de la clé : examIdx_roomName_type_slotIdx_survIdx
         for (const [key, assignedName] of Object.entries(DB.planning)) {
             if (assignedName !== fullName) continue;
-
             const parts = key.split('_');
             if (parts.length < 5) continue; 
-
             const examIdx = parseInt(parts[0]);
             const roomName = parts[1];
-            const type = parts[2]; // 'std' ou 'tt'
+            const type = parts[2];
             const slotIdx = parseInt(parts[3]);
-
             const exam = DB.exams[examIdx];
-            if (!exam) continue;
-
-            // RÉCUPÉRATION DYNAMIQUE DU CRÉNEAU
-            let slot = { start: "??", end: "??" };
             
+            let slot = { start: "??", end: "??" };
             if(exam.slots && exam.slots[type] && exam.slots[type][slotIdx]) {
-                // On récupère les heures exactes du découpage
                 slot = exam.slots[type][slotIdx];
             } else {
-                // Calcul automatique si aucun découpage manuel n'a été fait
-                const startTime = (type === 'tt' && exam.timeTT) ? exam.timeTT : exam.time;
-                const duration = type === 'tt' ? exam.durTT : exam.durStd;
-                
-                // Utilisation de la fonction helper addMinutesObj déjà présente dans votre code
-                slot.start = startTime;
-                slot.end = addMinutesObj(startTime, duration);
+                 slot = { start: type==='tt'? (exam.timeTT||exam.time):exam.time, end: "..." };
             }
-
-            duties.push({
-                date: exam.date,
-                start: slot.start,
-                end: slot.end,
-                name: exam.name,
-                room: roomName,
-                isTT: (type === 'tt')
-            });
+            duties.push({ date: exam.date, start: slot.start, end: slot.end, name: exam.name, room: roomName, isTT: (type === 'tt') });
         }
 
         if(duties.length === 0) return;
+        if(count > 0) doc.addPage(); count++;
 
-        if(count > 0) doc.addPage();
-        count++;
-
-        // --- Mise en page (Logo et Header) ---
         addSmartLogo(doc, 15, 10, 45);
-        doc.setFontSize(10); doc.setTextColor(100); 
-        doc.text("DNB BLANC", 195, 12, {align:'right'}); 
-        doc.text(`Session ${DB.config.year}`, 195, 17, {align:'right'});
+        doc.setFontSize(10); doc.setTextColor(100); doc.text("DNB BLANC", 195, 12, {align:'right'}); doc.text(`Session ${DB.config.year}`, 195, 17, {align:'right'});
+        doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'});
+        doc.setFontSize(18); doc.setTextColor(0); doc.text("CONVOCATION SURVEILLANCE", 105, 40, {align:'center'});
 
-        doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold");
-        doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'});
-
-        doc.setFontSize(18); doc.setTextColor(0);
-        doc.text("CONVOCATION SURVEILLANCE", 105, 40, {align:'center'});
-
-        doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80);
-        doc.rect(15, 50, 180, 20, 'FD');
-        doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold");
-        doc.text(`${teacher.civ || ""} ${fullName}`, 20, 62);
+        doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.rect(15, 50, 180, 20, 'FD');
+        doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); doc.text(`${teacher.civ || ""} ${fullName}`, 20, 62);
         
-        doc.setFontSize(11); doc.setFont("helvetica","normal");
-        doc.text("Planning de vos créneaux de surveillance :", 15, 85);
+        doc.setFontSize(11); doc.setFont("helvetica","normal"); doc.text("Planning de vos créneaux de surveillance :", 15, 85);
 
-        // Tri chronologique des créneaux
         duties.sort((a,b) => {
             const dateComp = a.date.localeCompare(b.date);
             if(dateComp !== 0) return dateComp;
             return a.start.localeCompare(b.start);
         });
 
-        let tableBody = duties.map(d => {
+        const bodyTable = duties.map(d => {
             const dateObj = new Date(d.date + "T12:00:00");
             const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' });
             return [ dateStr, `${d.start} - ${d.end}`, d.name + (d.isTT ? " (TT)" : ""), d.room ];
         });
 
         doc.autoTable({
-            head: [['Date', 'Créneau', 'Épreuve', 'Salle']],
-            body: tableBody,
-            startY: 90,
+            head: [['Date', 'Créneau', 'Épreuve', 'Salle']], 
+            body: bodyTable, 
+            startY: 90, 
             theme: 'grid',
-            headStyles: { fillColor: [44,62,80] },
+            headStyles: { fillColor: [44,62,80] }, 
             styles: { cellPadding: 3, valign: 'middle', fontSize: 10 },
             columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35, fontStyle:'bold' }, 3: { cellWidth: 25, halign:'center' } }
         });
 
-        // Signature
-        let finalY = doc.lastAutoTable.finalY + 30;
-        if(finalY > 260) { doc.addPage(); finalY = 40; }
+        // --- INSERTION DU TEXTE SANS TITRE ---
+        let yApresTableau = doc.lastAutoTable.finalY + 12;
 
-        doc.setFontSize(11);
-        doc.text(`Fait à ${DB.config.city || "SJI"}, le ${new Date().toLocaleDateString()}`, 140, finalY, {align:'center'});            
-        doc.setFont("helvetica","bold");
-        doc.text(DB.config.director.civ || "Le Chef d'Établissement", 140, finalY + 5, {align:'center'});
-        doc.text(DB.config.director.name || "", 140, finalY + 10, {align:'center'});
+        if (notePourProfs !== "") {
+            if (yApresTableau > 250) { doc.addPage(); yApresTableau = 25; }
+
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal"); // Texte simple, pas de gras
+            doc.setTextColor(0);
+            
+            const lignesTexte = doc.splitTextToSize(notePourProfs, 180);
+            // On écrit le texte directement à la position yApresTableau
+            doc.text(lignesTexte, 15, yApresTableau);
+            
+            yApresTableau += (lignesTexte.length * 6) + 12;
+        }
+
+        // --- SIGNATURE ---
+        let ySignature = yApresTableau;
+        if(ySignature > 260) { doc.addPage(); ySignature = 30; }
+
+        doc.setFontSize(11); 
+        doc.text(`Fait à ${DB.config.city || "SJI"}, le ${new Date().toLocaleDateString()}`, 140, ySignature, {align:'center'});            
+        doc.setFont("helvetica","bold"); 
+        doc.text(DB.config.director.civ || "Le Chef", 140, ySignature + 7, {align:'center'});
+        doc.text(DB.config.director.name || "", 140, ySignature + 14, {align:'center'});
 
         if(DB.config.signature) { 
-            try {
-                const imgProps = doc.getImageProperties(DB.config.signature);
-                const ratio = imgProps.width / imgProps.height;
-                doc.addImage(DB.config.signature, 'PNG', 125, finalY + 15, 18*ratio, 18);
+             try {
+                const propsImg = doc.getImageProperties(DB.config.signature);
+                const ratioImg = propsImg.width / propsImg.height;
+                doc.addImage(DB.config.signature, 'PNG', 125, ySignature + 18, 25*ratioImg, 25);
             } catch(e) {}
         }
     });
 
-    doc.save(`Convocations_Profs_${new Date().toLocaleDateString().replace(/\//g,'-')}.pdf`);
+    doc.save("Convocations_Profs.pdf");
 };
 
 
@@ -6891,6 +6863,119 @@ function handleDrop(e, targetRoomName) {
     if (typeof autoSave === 'function') autoSave();
     renderVisualDistribution();
 }
+
+window.exportStudentsToExcel = function() {
+    if (!DB.students || DB.students.length === 0) {
+        return alert("Aucun élève à exporter.");
+    }
+
+    // Préparation des en-têtes du fichier
+    const data = [
+        ["Nom", "Prénom", "Sexe", "Classe", "MEF", "Anonymat", "Tiers-Temps", "Aménagements"]
+    ];
+
+    // Remplissage des lignes avec les données de la base
+    DB.students.forEach(s => {
+        data.push([
+            s.nom,
+            s.prenom,
+            s.sexe,
+            s.classe || "Non classé",
+            s.mef || "",
+            s.anonymat || "", // Inclusion du numéro d'anonymat
+            s.tt ? "OUI" : "NON",
+            s.labels ? s.labels.join(", ") : "" // Liste des codes d'aménagements
+        ]);
+    });
+
+    // Création du classeur Excel
+    try {
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Liste_Eleves");
+
+        // Ajustement automatique de la largeur des colonnes
+        ws['!cols'] = [
+            { wch: 20 }, // Nom
+            { wch: 20 }, // Prénom
+            { wch: 8  }, // Sexe
+            { wch: 12 }, // Classe
+            { wch: 15 }, // MEF
+            { wch: 15 }, // Anonymat
+            { wch: 12 }, // TT
+            { wch: 25 }  // Aménagements
+        ];
+
+        // Téléchargement du fichier
+        const fileName = `Export_Eleves_DNB_${DB.config.year || 2026}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    } catch (err) {
+        console.error(err);
+        alert("Erreur lors de la génération du fichier Excel : " + err.message);
+    }
+};
+
+function getNoteHGEMC(student) {
+    if (!student.grades) return null;
+    const g = student.grades;
+    
+    // Si notes séparées : calcul pondéré (HG*1.5 + EMC*0.5) / 2
+    if (DB.config.splitHGEMC) {
+        const hg = (g.hg !== null && g.hg !== undefined) ? parseFloat(g.hg) : null;
+        const emc = (g.emc !== null && g.emc !== undefined) ? parseFloat(g.emc) : null;
+        
+        if (hg === null && emc === null) return null;
+        // On calcule la moyenne pondérée ramenée sur 20
+        return ((hg || 0) * 1.5 + (emc || 0) * 0.5) / 2;
+    } 
+    
+    // Si note unique : on retourne simplement la note HG
+    return (g.hg !== null && g.hg !== undefined) ? parseFloat(g.hg) : null;
+}
+
+function getDetailSciences(student) {
+    if (!student.grades) return { average: null, detail: "" };
+    const g = student.grades;
+    let notes = [];
+    let total = 0;
+
+    if (g.svt !== null) { notes.push(`SVT: ${g.svt}`); total += g.svt; }
+    if (g.pc !== null)  { notes.push(`PC: ${g.pc}`); total += g.pc; }
+    if (g.tech !== null) { notes.push(`Tech: ${g.tech}`); total += g.tech; }
+
+    if (notes.length === 0) return { average: null, detail: "" };
+    
+    const avg = total / notes.length;
+    // On ne renvoie le détail que s'il y a plus d'une note
+    return {
+        average: avg,
+        detail: notes.length > 1 ? notes.join(" | ") : ""
+    };
+}
+
+function getDetailHGEMC(student) {
+    if (!student.grades) return { average: null, detail: "" };
+    const g = student.grades;
+    
+    if (DB.config.splitHGEMC) {
+        const hg = g.hg !== null ? parseFloat(g.hg) : null;
+        const emc = g.emc !== null ? parseFloat(g.emc) : null;
+        
+        if (hg === null && emc === null) return { average: null, detail: "" };
+        
+        const avg = ((hg || 0) * 1.5 + (emc || 0) * 0.5) / 2;
+        return {
+            average: avg,
+            detail: `HG: ${hg ?? '-'} | EMC: ${emc ?? '-'}`
+        };
+    } else {
+        return {
+            average: g.hg !== null ? parseFloat(g.hg) : null,
+            detail: "" // Pas de détail si note unique
+        };
+    }
+}
+
 </script>
 
 </body></html>
