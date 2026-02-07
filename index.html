@@ -406,6 +406,75 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
 .tile-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 5px; color: #34495e; }
 .tile-desc { font-size: 0.85rem; color: #7f8c8d; line-height: 1.3; }
 
+#tableGradesPreview tbody tr { cursor: pointer; transition: background 0.2s; }
+#tableGradesPreview tbody tr:hover { background-color: #f0f7ff !important; }
+
+/* NOUVEAU STYLE POUR LA MODALE D'IMPORT */
+.modal-split-layout {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr; /* Gauche plus large que Droite */
+    gap: 30px;
+    margin-top: 15px;
+    text-align: left;
+}
+
+.mapping-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.mapping-row:last-child { border-bottom: none; }
+
+/* Style des Tuiles (Mode Options) */
+.import-tile {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.import-tile:hover {
+    border-color: #cbd3da;
+    transform: translateY(-2px);
+}
+
+.import-tile.active {
+    background-color: #e8f4fd;
+    border-color: #0d6efd;
+    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.15);
+}
+
+.import-tile h4 {
+    margin: 0 0 5px 0;
+    color: #333;
+    font-size: 1em;
+}
+
+.import-tile p {
+    margin: 0;
+    font-size: 0.85em;
+    color: #666;
+    line-height: 1.4;
+}
+
+/* Indicateur visuel de sélection */
+.tile-check {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: #0d6efd;
+    font-weight: bold;
+    display: none;
+}
+.import-tile.active .tile-check { display: block; }
+
 </style>
 </head>
 <body>
@@ -929,28 +998,21 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
                     <input type="text" id="simulSearchInput" placeholder="Nom ou Prénom..." style="width:250px; margin:0;" onkeyup="filterSimulation(this.value)">
                 </div>
 
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <h4>Tableau Prévisionnel</h4>
-                    <button class="btn btn-success" onclick="exportSimulationXLSX()">💾 Exporter Excel</button>
-                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <h4>Tableau Prévisionnel</h4>
+    <div>
+        <button class="btn btn-danger" onclick="openPdfOptions()" style="margin-right:10px;">
+            📄 Générer les Fiches (PDF)
+        </button>
+        <button class="btn btn-success" onclick="exportSimulationXLSX()">
+            💾 Exporter Excel
+        </button>
+    </div>
+</div>
 
-                <div style="max-height:500px; overflow-y:auto; border:1px solid #ddd;">
-                    <table id="tableSimulation">
-                        <thead>
-                            <tr style="position:sticky; top:0; background:#f2f2f2; z-index:10;">
-                                <th class="sortable" onclick="sortSimulation('nom')">Elève ▼</th>
-                                <th class="sortable" onclick="sortSimulation('classe')">Classe ▼</th>
-                                <th class="sortable" onclick="sortSimulation('moyEcrit')" style="text-align:center">Moy. Écrits (DNB) ▼</th>
-                                <th class="sortable" onclick="sortSimulation('oral')" style="text-align:center">Note Oral ▼</th>
-                                <th class="sortable" onclick="sortSimulation('moyEpreuve')" style="text-align:center">Moy. Epreuves (60%) ▼</th>
-                                <th class="sortable" onclick="sortSimulation('moyGen')" style="text-align:center">Moy. Générale (40%) ▼</th>
-                                <th class="sortable" onclick="sortSimulation('final')" style="background:#eaf2f8; text-align:center; font-weight:bold;">MOYENNE DNB /20 ▼</th>
-                                <th class="sortable" onclick="sortSimulation('final')" style="text-align:center">Mention Estimée ▼</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
+                <div style="max-height:600px; overflow-y:auto; border:1px solid #ddd; border-radius: 4px;">
+    <div id="simulation-list"></div>
+</div>
             </div>
         </div>
     </div>
@@ -1045,6 +1107,96 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
             <button class="btn btn-secondary" onclick="closeHGModal()" style="margin-top:20px;">Annuler l'import</button>
         </div>
     </div>
+
+<div id="manualGradeModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header" id="manualGradeTitle">Édition des notes</div>
+        <input type="hidden" id="manualGradeStudentId">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+            <div><label>Français</label><input type="number" step="0.5" id="mGradeFr"></div>
+            <div><label>Mathématiques</label><input type="number" step="0.5" id="mGradeMath"></div>
+            
+            <div>
+                <label id="labelHg">HG / EMC</label>
+                <input type="number" step="0.5" id="mGradeHg">
+            </div>
+            
+            <div id="containerMGradeEmc" style="display:none;">
+                <label>EMC</label>
+                <input type="number" step="0.5" id="mGradeEmc">
+            </div>
+
+            <div><label>SVT</label><input type="number" step="0.5" id="mGradeSvt"></div>
+            <div><label>Physique-Chimie</label><input type="number" step="0.5" id="mGradePc"></div>
+            <div><label>Technologie</label><input type="number" step="0.5" id="mGradeTech"></div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 25px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('manualGradeModal').style.display='none'">Annuler</button>
+            <button class="btn btn-success" onclick="saveManualGrades()">💾 Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<div id="importReportModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">Bilan de l'importation</div>
+        <div id="importReportSummary" style="margin: 15px 0; font-weight: bold; font-size: 1.1em;"></div>
+        <div id="importReportDetails" style="max-height: 300px; overflow-y: auto; text-align: left; background: #fff5f5; padding: 15px; border-radius: 5px; border: 1px solid #feb2b2;">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="document.getElementById('importReportModal').style.display='none'">Fermer</button>
+        </div>
+    </div>
+</div>
+
+<div id="mappingModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width: 900px; padding: 25px;">
+        <div class="modal-header" style="border-bottom: 2px solid #f0f0f0; padding-bottom:15px;">
+            Configuration de l'importation
+        </div>
+        
+        <div class="modal-split-layout">
+            
+            <div>
+                <h3 style="margin-top:0; font-size:1.1em; color:#444;">1. Correspondance des colonnes</h3>
+                <p style="font-size:0.9em; color:#666; margin-bottom:15px;">
+                    Vérifiez que chaque matière correspond à la bonne colonne de votre fichier Excel.
+                </p>
+                
+                <div id="mappingContainer" style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+                    </div>
+            </div>
+
+            <div style="background: #fafafa; padding: 15px; border-radius: 8px;">
+                <h3 style="margin-top:0; font-size:1.1em; color:#444;">2. Gestion des données</h3>
+                <p style="font-size:0.9em; color:#666; margin-bottom:15px;">
+                    Que faire si une case est vide dans le fichier Excel ?
+                </p>
+                
+                <input type="hidden" id="selectedImportMode" value="merge">
+
+                <div class="import-tile active" onclick="setImportMode('merge', this)">
+                    <div class="tile-check">✔</div>
+                    <h4>🛡️ Mode Fusion (Sécurité)</h4>
+                    <p>On ne touche pas aux notes existantes si la case Excel est vide ou absente.</p>
+                </div>
+
+                <div class="import-tile" onclick="setImportMode('replace', this)">
+                    <div class="tile-check">✔</div>
+                    <h4>⚠️ Mode Remplacement</h4>
+                    <p>On efface la note existante si la case Excel est vide. (Mode strict).</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('mappingModal').style.display='none'">Annuler</button>
+            <button class="btn btn-success" style="padding: 10px 25px; font-size: 1em;" onclick="processMapping()">Lancer l'importation</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>
@@ -1290,7 +1442,21 @@ function nav(id, btn) {
     input.value = ""; // Reset pour permettre de réimporter le même fichier si besoin
 }
     
-    function findKey(row, keywords) { const keys = Object.keys(row); for (let k of keys) { const kLow = k.toLowerCase(); for (let kw of keywords) { if (kLow.includes(kw)) return k; } } return null; }
+    function findKey(row, keywords) {
+    // On récupère toutes les colonnes de la ligne
+    const keys = Object.keys(row);
+    for (let k of keys) {
+        // Nettoyage : minuscule et suppression des espaces autour
+        const cleanK = k.toLowerCase().trim();
+        for (let kw of keywords) {
+            // On compare en minuscules également
+            if (cleanK.includes(kw.toLowerCase().trim())) {
+                return k;
+            }
+        }
+    }
+    return null;
+}
     function parseGrade(val) { if (val === undefined || val === null || val === "") return null; if (typeof val === 'number') return val; let vStr = val.toString().replace(',', '.').trim(); let num = parseFloat(vStr); return isNaN(num) ? null : num; }
     
     // --- DÉBUT DU REMPLACEMENT ---
@@ -1347,53 +1513,208 @@ window.closeHGModal = function() {
 /**
  * TRAITEMENT FINAL : NOTES
  */
+// Variable globale pour stocker temporairement les données pendant que l'utilisateur choisit
+let pendingImportData = null;
+
+// 1. ANALYSE ET OUVERTURE SYSTÉMATIQUE DE LA MODALE
 function finalizeGradesImport(data) {
-    const row0 = data[0];
-    const kNom = findKey(row0, ['nom', 'élève', 'eleve']);
-    const kPrenom = findKey(row0, ['prénom', 'prenom']);
-    const kFr = findKey(row0, ['français', 'francais', 'fr']); 
-    const kMath = findKey(row0, ['math', 'mathématiques', 'mathematiques']); 
-    const kHG = findKey(row0, ['histoire', 'hg', 'géo', 'géographie']);
-    const kEMC = DB.config.splitHGEMC ? findKey(row0, ['emc', 'moral', 'civique']) : null;
-    const kSVT = findKey(row0, ['svt']); 
-    const kPC = findKey(row0, ['physique', 'pc']); 
-    const kTech = findKey(row0, ['techno']); 
+    if (!data || data.length === 0) return;
+    
+    // Définition des matières
+    const subjects = [
+        { key: 'fr', label: 'Français', keywords: ['français', 'francais', 'fr'] },
+        { key: 'math', label: 'Mathématiques', keywords: ['math', 'maths'] },
+        { key: 'hg', label: 'Hist-Géo', keywords: ['hg', 'histoire', 'géo'] },
+        { key: 'emc', label: 'EMC', keywords: ['emc', 'moral'] },
+        { key: 'svt', label: 'SVT', keywords: ['svt', 'vie'] },
+        { key: 'pc', label: 'Physique-Chimie', keywords: ['phys', 'pc', 'chimie'] }, 
+        { key: 'tech', label: 'Technologie', keywords: ['tech', 'techno'] }
+    ];
 
-    if(!kNom) return alert("❌ Colonne 'Nom' introuvable.");
+    // Pré-calcul du mapping
+    const row0 = data[0]; 
+    const headers = Object.keys(row0);
+    let mapping = {};
 
-    data.forEach((row, idx) => {
-        if (idx === 0 || !row[kNom]) return;
-
-        const student = DB.students.find(s => 
-            s.nom.toLowerCase().trim() === row[kNom].toString().toLowerCase().trim() &&
-            (kPrenom && row[kPrenom] ? s.prenom.toLowerCase().trim() === row[kPrenom].toString().toLowerCase().trim() : true)
-        );
-
-        if(student) {
-            student.grades = { 
-                fr: cleanNumber(row[kFr]), 
-                math: cleanNumber(row[kMath]), 
-                hg: cleanNumber(row[kHG]),
-                emc: DB.config.splitHGEMC ? cleanNumber(row[kEMC]) : null,
-                svt: cleanNumber(row[kSVT]), 
-                pc: cleanNumber(row[kPC]), 
-                tech: cleanNumber(row[kTech]) 
-            };
-        }
+    subjects.forEach(s => {
+        const found = findKey(row0, s.keywords);
+        mapping[s.key] = found || ""; // Trouvé ou vide
     });
+
+    // ON OUVRE TOUJOURS LA MODALE pour laisser le choix du mode (Fusion vs Remplacement)
+    openMappingModal(headers, mapping, subjects, data);
+}
+
+// A. GESTION DES TUILES (VISUEL)
+function setImportMode(mode, element) {
+    // Mise à jour de la valeur cachée
+    document.getElementById('selectedImportMode').value = mode;
+    
+    // Mise à jour visuelle (classe active)
+    document.querySelectorAll('.import-tile').forEach(el => el.classList.remove('active'));
+    element.classList.add('active');
+}
+
+// B. OUVERTURE DE LA MODALE (LAYOUT GAUCHE/DROITE)
+function openMappingModal(headers, currentMapping, subjects, data) {
+    pendingImportData = data;
+    const container = document.getElementById('mappingContainer');
+    container.innerHTML = '';
+
+    subjects.forEach(s => {
+        const div = document.createElement('div');
+        div.className = 'mapping-row';
+        
+        // Liste déroulante stylisée
+        const options = headers.map(h => 
+            `<option value="${h}" ${currentMapping[s.key] === h ? 'selected' : ''}>${h}</option>`
+        ).join('');
+
+        div.innerHTML = `
+            <span style="font-weight:600; color:#555;">${s.label}</span>
+            <select id="map_sel_${s.key}" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px; width: 60%;">
+                <option value="">-- Ignorer --</option>
+                ${options}
+            </select>`;
+        
+        container.appendChild(div);
+    });
+
+    // Reset visuel sur "Fusion" par défaut
+    const tiles = document.querySelectorAll('.import-tile');
+    tiles.forEach(t => t.classList.remove('active'));
+    tiles[0].classList.add('active'); // La première tuile est "Merge"
+    document.getElementById('selectedImportMode').value = 'merge';
+
+    document.getElementById('mappingModal').style.display = 'flex';
+}
+
+// C. VALIDATION (PROCESS)
+function processMapping() {
+    // 1. Récupération du Mapping (Gauche)
+    const mapping = {
+        fr: document.getElementById('map_sel_fr').value,
+        math: document.getElementById('map_sel_math').value,
+        hg: document.getElementById('map_sel_hg').value,
+        emc: document.getElementById('map_sel_emc').value,
+        svt: document.getElementById('map_sel_svt').value,
+        pc: document.getElementById('map_sel_pc').value,
+        tech: document.getElementById('map_sel_tech').value
+    };
+
+    // 2. Récupération du Mode (Droite) via l'input caché
+    const mode = document.getElementById('selectedImportMode').value;
+    const isStrict = (mode === 'replace'); // true ou false
+
+    document.getElementById('mappingModal').style.display = 'none';
+    
+    // Appel au moteur (qui reste inchangé avec la logique i=0)
+    executeImport(pendingImportData, mapping, isStrict);
+}
+
+// 4. EXÉCUTION (LE MOTEUR)
+function executeImport(data, mapping, isStrictReplace) {
+    let countSuccess = 0;
+    let notFound = [];
+    
+    const kNom = findKey(data[0], ['nom', 'élève', 'eleve']);
+    const kPrenom = findKey(data[0], ['prénom', 'prenom']);
+
+    if(!kNom) { alert("Erreur: Colonne NOM introuvable !"); return; }
+
+    // Boucle commençant à 0 (Correction V13.4 conservée)
+    for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const rawNom = row[kNom]?.toString().toUpperCase().trim();
+        const rawPrenom = kPrenom && row[kPrenom] ? row[kPrenom].toString().toUpperCase().trim() : "";
+        
+        if (!rawNom) continue;
+
+        const student = DB.students.find(s => {
+            const matchNom = s.nom.toUpperCase().trim() === rawNom;
+            const matchPrenom = kPrenom ? (s.prenom.toUpperCase().trim() === rawPrenom) : true;
+            return matchNom && matchPrenom;
+        });
+
+        if (student) {
+            // LOGIQUE CŒUR : 
+            // - Si nouvelle valeur existe dans Excel : on prend (cleanNumber).
+            // - Si nouvelle valeur vide :
+            //      -> Si Mode Strict (isStrictReplace = true) : on met null (on efface).
+            //      -> Si Mode Fusion (isStrictReplace = false) : on garde l'ancienne (student.grades?.xx).
+
+            const resolve = (key) => {
+                // Y a-t-il une colonne mappée ?
+                if (!mapping[key]) return student.grades?.[key] || null; // Pas de colonne = on touche pas
+                
+                // Valeur brute dans Excel
+                const valExcel = row[mapping[key]];
+                const valClean = cleanNumber(valExcel);
+
+                if (valClean !== null) {
+                    return valClean; // Excel contient une vraie note, on prend.
+                } else {
+                    // Excel est vide ou "ABS".
+                    return isStrictReplace ? null : (student.grades?.[key] || null);
+                }
+            };
+
+            student.grades = {
+                ...student.grades, // Préserve oral, etc.
+                fr: resolve('fr'),
+                math: resolve('math'),
+                hg: resolve('hg'),
+                emc: resolve('emc'),
+                svt: resolve('svt'),
+                pc: resolve('pc'),
+                tech: resolve('tech')
+            };
+            countSuccess++;
+        } else {
+            notFound.push(`${rawNom} ${rawPrenom}`);
+        }
+    }
 
     saveDB();
     renderGrades();
-    alert("✅ Importation effectuée.");
+    
+    if(typeof showImportReport === 'function') {
+        showImportReport(countSuccess, notFound);
+    } else {
+        alert(`${countSuccess} importés.`);
+    }
+}
+
+function showImportReport(successCount, notFoundList) {
+    const modal = document.getElementById('importReportModal');
+    const summary = document.getElementById('importReportSummary');
+    const details = document.getElementById('importReportDetails');
+
+    summary.innerHTML = `<span style="color: green;">✅ ${successCount} élève(s) mis à jour.</span>`;
+    
+    if (notFoundList.length > 0) {
+        summary.innerHTML += `<br><span style="color: #c53030;">⚠️ ${notFoundList.length} élève(s) non trouvés dans la base.</span>`;
+        details.innerHTML = "<strong>Liste des élèves ignorés :</strong><ul>" + 
+            notFoundList.map(name => `<li>${name}</li>`).join('') + "</ul>";
+        details.style.display = "block";
+    } else {
+        details.innerHTML = "Tous les élèves du fichier ont été importés.";
+        details.style.display = "none";
+    }
+
+    modal.style.display = 'flex';
 }
 
 /**
  * TRAITEMENT FINAL : ÉLÈVES / PROFS / SALLES / SIMU
  */
 function finalizeGeneralImport(data, type) {
-    let report = { success: 0, errors: [] };
-    const row0 = data[0];
+    if (!data || data.length === 0) return;
 
+    let report = { success: 0, errors: [] };
+    const row0 = data[0]; // La première ligne sert à la détection des colonnes
+
+    // --- IMPORTATION DES ÉLÈVES ---
     if (type === 'students') {
         const kNom = findKey(row0, ['nom']);
         const kPrenom = findKey(row0, ['prénom', 'prenom']);
@@ -1403,23 +1724,34 @@ function finalizeGeneralImport(data, type) {
         const kAno = findKey(row0, ['anonymat', 'ano', 'code', 'numéro']);
 
         data.forEach((row, idx) => {
-            if (idx === 0 || !row[kNom]) return;
+            // CORRECTION : On ne saute plus idx === 0
+            if (!row[kNom]) return;
+            
             let sexe = (kSexe && row[kSexe] && row[kSexe].toString().toLowerCase().includes('f')) ? "F" : "M";
-            DB.students.push({ 
-                id: Date.now() + Math.random(), 
-                nom: row[kNom].toString().trim().toUpperCase(), 
-                prenom: row[kPrenom] ? row[kPrenom].toString().trim() : "", 
-                classe: row[kClasse] ? row[kClasse].toString().trim() : "Non Classé", 
-                sexe: sexe, 
-                mef: kMef ? row[kMef].toString().trim() : "",
-                anonymat: kAno ? row[kAno].toString().trim() : "",
-                tt: false 
-            });
-            report.success++;
+            
+            // On vérifie les doublons pour ne pas recréer le même élève
+            const existing = DB.students.find(s => s.nom === row[kNom].toString().trim().toUpperCase() && s.prenom === (row[kPrenom] ? row[kPrenom].toString().trim() : ""));
+            
+            if (!existing) {
+                DB.students.push({ 
+                    id: Date.now() + Math.random(), 
+                    nom: row[kNom].toString().trim().toUpperCase(), 
+                    prenom: row[kPrenom] ? row[kPrenom].toString().trim() : "", 
+                    classe: row[kClasse] ? row[kClasse].toString().trim() : "Non Classé", 
+                    sexe: sexe, 
+                    mef: kMef ? row[kMef].toString().trim() : "",
+                    anonymat: kAno ? row[kAno].toString().trim() : "",
+                    tt: false,
+                    grades: {} // On initialise l'objet grades
+                });
+                report.success++;
+            }
         });
+        updateClassFilters(); // Met à jour les filtres de classe
         renderStudents();
     } 
     
+    // --- IMPORTATION PROFS ---
     else if (type === 'teachers') {
         const kNom = findKey(row0, ['nom']);
         const kPrenom = findKey(row0, ['prénom', 'prenom']);
@@ -1427,8 +1759,11 @@ function finalizeGeneralImport(data, type) {
         const kMat = findKey(row0, ['matière', 'discipline']);
 
         data.forEach((row, idx) => {
-            if (idx === 0 || !row[kNom]) return;
+            // CORRECTION : On ne saute plus idx === 0
+            if (!row[kNom]) return;
+            
             DB.teachers.push({ 
+                id: Date.now() + Math.random(),
                 civ: kCiv ? row[kCiv] : "M.", 
                 nom: row[kNom].toString().trim().toUpperCase(), 
                 prenom: kPrenom ? row[kPrenom].toString().trim() : "", 
@@ -1439,12 +1774,16 @@ function finalizeGeneralImport(data, type) {
         renderTeachers();
     }
 
+    // --- IMPORTATION SALLES ---
     else if (type === 'rooms') {
         const kNom = findKey(row0, ['nom', 'salle']);
         const kCap = findKey(row0, ['capacité', 'places']);
         data.forEach((row, idx) => {
-            if (idx === 0 || !row[kNom]) return;
+            // CORRECTION : On ne saute plus idx === 0
+            if (!row[kNom]) return;
+            
             DB.rooms.push({ 
+                id: Date.now() + Math.random(),
                 nom: row[kNom].toString().trim(), 
                 capacite: kCap ? parseInt(row[kCap]) : 20, 
                 isTT: false, isAmen: false 
@@ -1454,25 +1793,98 @@ function finalizeGeneralImport(data, type) {
         renderRooms();
     }
 
+    // --- IMPORTATION SIMULATION (Oral / Moyenne Générale) ---
     else if (type === 'oral' || type === 'general') {
-        const kNom = findKey(row0, ['nom']);
-        const kVal = type === 'oral' ? findKey(row0, ['note', 'oral']) : findKey(row0, ['moyenne', 'générale']);
+        const kNom = findKey(row0, ['nom', 'élève']);
+        
+        const kVal = type === 'oral' 
+            ? findKey(row0, ['note', 'oral', 'soutenance', 'dnb']) 
+            : findKey(row0, ['moyenne', 'générale', 'gen', 'socle', 'trimestre']);
+
         data.forEach((row, idx) => {
-            if (idx === 0 || !row[kNom]) return;
-            const student = DB.students.find(s => s.nom.toLowerCase() === row[kNom].toString().trim().toLowerCase());
+            if (!row[kNom]) return;
+
+            const student = DB.students.find(s => s.nom.toLowerCase().trim() === row[kNom].toString().toLowerCase().trim());
+            
             if(student) {
                 if(!student.grades) student.grades = {};
                 let val = cleanNumber(row[kVal]);
-                if(type === 'oral') student.grades.oral = val;
-                else student.grades.genAvg = val;
-                report.success++;
+                
+                if (val !== null) {
+                    // On stocke la valeur brute sur 20 (pas de conversion)
+                    if(type === 'oral') student.grades.oral = val; 
+                    else student.grades.genAvg = val;
+                    report.success++;
+                }
             }
         });
+        
+        saveDB();
         renderSimulation();
     }
 
+    if(report.success > 0) alert(`✅ Importation terminée : ${report.success} éléments ajoutés.`);
+}
+
+function openManualGradeModal(studentId) {
+    const s = DB.students.find(st => st.id == studentId);
+    if(!s) return;
+
+    document.getElementById('manualGradeStudentId').value = s.id;
+    document.getElementById('manualGradeTitle').innerText = `Notes de ${s.nom} ${s.prenom}`;
+    
+    const g = s.grades || {};
+    
+    document.getElementById('mGradeFr').value = g.fr ?? "";
+    document.getElementById('mGradeMath').value = g.math ?? "";
+    document.getElementById('mGradeHg').value = g.hg ?? "";
+    document.getElementById('mGradeSvt').value = g.svt ?? "";
+    document.getElementById('mGradePc').value = g.pc ?? "";
+    document.getElementById('mGradeTech').value = g.tech ?? "";
+
+    const emcCont = document.getElementById('containerMGradeEmc');
+    const labelHg = document.getElementById('labelHg');
+    
+    if (DB.config.splitHGEMC) {
+        labelHg.innerText = "Hist-Géo";
+        emcCont.style.display = "block";
+        document.getElementById('mGradeEmc').value = g.emc ?? "";
+    } else {
+        labelHg.innerText = "HG / EMC";
+        emcCont.style.display = "none";
+    }
+
+    document.getElementById('manualGradeModal').style.display = 'flex';
+}
+
+function saveManualGrades() {
+    const id = document.getElementById('manualGradeStudentId').value;
+    const s = DB.students.find(st => st.id == id);
+    if(!s) return;
+
+    const getVal = (id) => {
+        const v = document.getElementById(id).value;
+        return (v === "") ? null : parseFloat(v);
+    };
+
+    // On préserve les notes d'oral et de socle existantes
+    const oldGrades = s.grades || {};
+
+    s.grades = {
+        ...oldGrades, // Garde oral, genAvg, etc.
+        fr: getVal('mGradeFr'),
+        math: getVal('mGradeMath'),
+        hg: getVal('mGradeHg'),
+        emc: DB.config.splitHGEMC ? getVal('mGradeEmc') : oldGrades.emc,
+        svt: getVal('mGradeSvt'),
+        pc: getVal('mGradePc'),
+        tech: getVal('mGradeTech')
+    };
+
     saveDB();
-    alert(`✅ Importation terminée : ${report.success} éléments ajoutés.`);
+    renderGrades();
+    document.getElementById('manualGradeModal').style.display = 'none';
+    if(typeof showToast === 'function') showToast("Modifications enregistrées");
 }
 
 // --- FIN DU REMPLACEMENT ---
@@ -1483,10 +1895,9 @@ function finalizeGeneralImport(data, type) {
     const filterClass = document.getElementById('filterClassGrades').value;
     if (!tbody || !thead) return;
 
-    // 1. Gestion de l'en-tête dynamique
-    // On ajoute les colonnes HG et EMC AVANT la colonne HG-EMC globale si on est en mode split
+    // En-tête dynamique
     let hgSpecificHeaders = DB.config.splitHGEMC 
-        ? `<th class="sortable" onclick="sortGrades('hg')">HG  ▼</th><th class="sortable" onclick="sortGrades('emc')">EMC  ▼</th>`
+        ? `<th class="sortable" onclick="sortGrades('hg')">HG ▼</th><th class="sortable" onclick="sortGrades('emc')">EMC ▼</th>`
         : '';
 
     thead.innerHTML = `
@@ -1497,21 +1908,18 @@ function finalizeGeneralImport(data, type) {
             <th class="sortable" onclick="sortGrades('fr')">Français ▼</th>
             <th class="sortable" onclick="sortGrades('math')">Maths ▼</th>
             ${hgSpecificHeaders}
-            <th class="sortable" onclick="sortGrades('hgemc_global')" style="background:#fcf3cf;">HG-EMC  ▼</th>
+            <th class="sortable" onclick="sortGrades('hgemc_global')" style="background:#fcf3cf;">HG-EMC ▼</th>
             <th class="sortable" onclick="sortGrades('svt')">SVT ▼</th>
             <th class="sortable" onclick="sortGrades('pc')">Phys-Chi ▼</th>
             <th class="sortable" onclick="sortGrades('tech')">Techno ▼</th>
             <th class="sortable" onclick="sortGrades('moySci')" style="background:#eaf2f8;">Moy. Sci. ▼</th>
         </tr>`;
 
-    // 2. Remplissage des données
     tbody.innerHTML = '';
     const filteredStudents = DB.students.filter(s => filterClass === 'all' || s.classe === filterClass);
 
     filteredStudents.forEach(s => {
         const g = s.grades || {};
-        
-        // Calcul des blocs
         const noteHGCalcul = getNoteHGEMC(s); 
         
         let sc = 0, c = 0;
@@ -1520,16 +1928,17 @@ function finalizeGeneralImport(data, type) {
         if(g.tech != null) { sc += g.tech; c++; }
         const moySci = c > 0 ? (sc / c).toFixed(1) : '-';
 
-        // Moyenne DNB (Moyenne des 4 blocs sur 20)
         const gradesList = [g.fr, g.math, noteHGCalcul, c > 0 ? parseFloat(moySci) : null].filter(v => v !== null);
         const moyDNB = gradesList.length > 0 ? (gradesList.reduce((a, b) => a + b, 0) / gradesList.length).toFixed(1) : '-';
 
-        // Cellules de données HG / EMC si mode split
         let hgSpecificCells = DB.config.splitHGEMC 
             ? `<td>${g.hg ?? '-'}</td><td>${g.emc ?? '-'}</td>`
             : '';
 
         const tr = document.createElement('tr');
+        // AJOUT DE L'ÉVÉNEMENT CLIC
+        tr.onclick = () => openManualGradeModal(s.id);
+        
         tr.innerHTML = `
             <td><b>${s.nom}</b> ${s.prenom}</td>
             <td>${s.classe}</td>
@@ -1545,63 +1954,193 @@ function finalizeGeneralImport(data, type) {
         `;
         tbody.appendChild(tr);
     });
+    
+    // Mise à jour du compteur
+    const lbl = document.getElementById('gradeCountLabel');
+    if(lbl) lbl.innerText = `${filteredStudents.length} élèves affichés (Cliquer sur une ligne pour éditer)`;
 }
     function sortGrades(key) { if(gradeSortState.key === key) { gradeSortState.order = gradeSortState.order === 'asc' ? 'desc' : 'asc'; } else { gradeSortState.key = key; gradeSortState.order = 'desc'; } renderGrades(); }
 
     function filterSimulation(val) { simulSearchTerm = val.toLowerCase(); renderSimulation(); }
     
     function renderSimulation() {
-    const container = document.getElementById('simulation-list');
-    if (!container) return;
+    // 1. SÉCURITÉ
+    let container = document.getElementById('simulation-list');
+    
+    if (!container) {
+        const oldTable = document.getElementById('tableSimulation');
+        if (oldTable && oldTable.parentNode) {
+            container = document.createElement('div');
+            container.id = 'simulation-list';
+            oldTable.parentNode.appendChild(container);
+            oldTable.style.display = 'none'; 
+        } else {
+            return;
+        }
+    }
 
+    // 2. EN-TÊTE
+    // [FIX DEV IA] En-tête avec gestionnaires de clics pour le tri
+    const getArrow = (k) => simulSortState.key === k ? (simulSortState.order === 'asc' ? ' ▲' : ' ▼') : '';
+    
     let html = `
-    <table class="table table-hover">
-        <thead class="table-primary">
+    <table class="table table-hover table-striped text-center align-middle" style="font-size: 0.9em; width: 100%;">
+        <thead class="table-dark" style="position: sticky; top: 0; z-index: 10; cursor: pointer;">
             <tr>
-                <th>Élève</th>
-                <th>Écrits (/400)</th>
-                <th>Oral (/100)</th>
-                <th>Socle (/400)</th>
-                <th>Total DNB (/800)</th>
-                <th>Mention</th>
+                <th class="text-start ps-3" onclick="sortSimulation('nom')">Élève${getArrow('nom')}</th>
+                <th onclick="sortSimulation('fr')">Français${getArrow('fr')}</th>
+                <th onclick="sortSimulation('math')">Maths${getArrow('math')}</th>
+                <th onclick="sortSimulation('hg')">HG/EMC${getArrow('hg')}</th>
+                <th onclick="sortSimulation('sci')">Sciences${getArrow('sci')}</th>
+                <th onclick="sortSimulation('oral')">Oral${getArrow('oral')}</th>
+                <th class="bg-secondary text-white" onclick="sortSimulation('moyEpreuves')">Moy. Épreuves${getArrow('moyEpreuves')}<br><small>(Coeff 0.6)</small></th>
+                <th onclick="sortSimulation('moyGen')">Moy. Générale${getArrow('moyGen')}<br><small>(Coeff 0.4)</small></th>
+                <th class="bg-primary text-white" onclick="sortSimulation('final')">FINAL / 20${getArrow('final')}</th>
+                <th onclick="sortSimulation('final')">MENTION${getArrow('final')}</th>
             </tr>
-        </thead><tbody>`;
+        </thead>
+        <tbody>`;
 
-    DB.students.forEach(s => {
+    // [FIX DEV IA] Logique de tri des données avant affichage
+    // Fonction helper locale pour calculer la note de tri d'un élève
+    const getSortVal = (s, key) => {
         const g = s.grades || {};
-        const noteBlocHG = getNoteHGEMC(s); // On appelle notre fonction de calcul
         
-        const totalEcrits = (parseFloat(g.fr) || 0) + 
-                            (parseFloat(g.math) || 0) + 
-                            (parseFloat(g.sciences) || 0) + 
-                            noteBlocHG;
-                            
-        const totalEpreuves = totalEcrits + (parseFloat(g.oral) || 0);
-        const pointsSocle = parseFloat(g.genAvg) || 0;
-        const totalFinal = totalEpreuves + pointsSocle;
+        // Valeurs brutes
+        if (key === 'nom') return s.nom;
+        if (key === 'fr') return parseFloat(g.fr) || 0;
+        if (key === 'math') return parseFloat(g.math) || 0;
+        if (key === 'oral') return parseFloat(g.oral) || 0;
+        if (key === 'moyGen') return parseFloat(g.genAvg) || 0;
 
-        let mention = "Ajourné";
-        let color = "danger";
-        if (totalFinal >= 400) { mention = "Admis"; color = "success"; }
-        if (totalFinal >= 480) { mention = "Assez Bien"; color = "info"; }
-        if (totalFinal >= 560) { mention = "Bien"; color = "primary"; }
-        if (totalFinal >= 640) { mention = "Très Bien"; color = "warning"; }
+        // Valeurs calculées (doivent correspondre à la logique d'affichage)
+        if (key === 'hg') {
+            const val = getNoteHGEMC(s); // Utilise la fonction centralisée
+            return val !== null ? val : 0;
+        }
+        if (key === 'sci') {
+            let sum = 0, n = 0;
+            if (g.svt) { sum += parseFloat(g.svt); n++; }
+            if (g.pc) { sum += parseFloat(g.pc); n++; }
+            if (g.tech) { sum += parseFloat(g.tech); n++; }
+            return n > 0 ? (sum / n) : 0;
+        }
+        
+        // Calculs complexes pour Moyenne Épreuve et Final
+        // On récupère les valeurs nettoyées
+        const nFr = parseFloat(g.fr) || 0;
+        const nMath = parseFloat(g.math) || 0;
+        const nOral = parseFloat(g.oral) || 0;
+        const nHG = (getNoteHGEMC(s) !== null) ? getNoteHGEMC(s) : 0;
+        
+        let sumSc = 0, nbSc = 0;
+        if (g.svt) { sumSc += parseFloat(g.svt); nbSc++; }
+        if (g.pc) { sumSc += parseFloat(g.pc); nbSc++; }
+        if (g.tech) { sumSc += parseFloat(g.tech); nbSc++; }
+        const nSci = nbSc > 0 ? (sumSc / nbSc) : 0;
 
+        const avgEpreuves = (nFr + nMath + nHG + nSci + nOral) / 5;
+
+        if (key === 'moyEpreuves') return avgEpreuves;
+        if (key === 'final') {
+            const avgGen = parseFloat(g.genAvg) || 0;
+            return (avgEpreuves * 0.6) + (avgGen * 0.4);
+        }
+        return 0;
+    };
+
+    // Application du tri sur une COPIE du tableau pour ne pas casser l'ordre ailleurs
+    let studentsToList = [...DB.students]; 
+    
+    if (simulSortState.key) {
+        studentsToList.sort((a, b) => {
+            const valA = getSortVal(a, simulSortState.key);
+            const valB = getSortVal(b, simulSortState.key);
+            
+            if (typeof valA === 'string') {
+                return simulSortState.order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            } else {
+                return simulSortState.order === 'asc' ? valA - valB : valB - valA;
+            }
+        });
+    }
+
+    // IMPORTANT : Change la boucle pour utiliser la liste triée
+    studentsToList.forEach(s => { // <-- Remplace DB.students.forEach par studentsToList.forEach
+        const g = s.grades || {};
+
+        // A. NOTES
+        const nFr = parseFloat(g.fr) || 0;
+        const nMath = parseFloat(g.math) || 0;
+        const nOral = parseFloat(g.oral) || 0;
+
+        // [FIX DEV IA] HG/EMC : Récupération via la fonction centralisée pour cohérence
+        const rawHG = getNoteHGEMC(s); 
+        const nHG = rawHG !== null ? rawHG : 0;
+
+        // Sciences
+        let sumSc = 0, nbSc = 0;
+        if (g.svt) { sumSc += parseFloat(g.svt); nbSc++; }
+        if (g.pc) { sumSc += parseFloat(g.pc); nbSc++; }
+        if (g.tech) { sumSc += parseFloat(g.tech); nbSc++; }
+        const nSciences = nbSc > 0 ? (sumSc / nbSc) : 0;
+
+        // B. CALCULS
+        const avgEpreuves = (nFr + nMath + nHG + nSciences + nOral) / 5;
+        const avgGen = parseFloat(g.genAvg) || 0;
+        
+        let finalGrade = (avgEpreuves * 0.6) + (avgGen * 0.4);
+        finalGrade = Math.round(finalGrade * 100) / 100;
+
+        // --- C. STYLE STANDARD ---
+        // Plus aucune exception, on utilise juste les classes Bootstrap
+        let mention = "Refusé"; 
+        let textClass = "text-danger"; // Rouge
+
+        if (finalGrade >= 10) { 
+            mention = "Admis"; 
+            textClass = "text-success"; // Vert
+        }
+        if (finalGrade >= 12) { 
+            mention = "Assez Bien"; 
+            textClass = "text-info"; // Bleu Ciel
+        }
+        if (finalGrade >= 14) { 
+            mention = "Bien"; 
+            textClass = "text-primary"; // Bleu Foncé
+        }
+        if (finalGrade >= 16) { 
+            mention = "Très Bien"; 
+            textClass = "text-warning"; // Jaune (Standard)
+        }
+
+        // D. LIGNE HTML
         html += `
         <tr>
-            <td>${s.nom} ${s.prenom}</td>
-            <td>${totalEcrits.toFixed(1)}</td>
-            <td>${g.oral || 0}</td>
-            <td>${pointsSocle}</td>
-            <td class="fw-bold text-${color === 'warning' ? 'dark' : 'white'} bg-${color}">${totalFinal.toFixed(1)}</td>
-            <td><span class="badge bg-${color}">${mention}</span></td>
+            <td class="text-start fw-bold ps-3">${s.nom} ${s.prenom}</td>
+            
+            <td class="text-muted">${(!g.fr && nFr===0) ? '-' : Number(nFr).toFixed(1)}</td>
+            <td class="text-muted">${(!g.math && nMath===0) ? '-' : Number(nMath).toFixed(1)}</td>
+            <td class="text-muted">${Number(nHG).toFixed(1)}</td>
+            <td class="text-muted">${Number(nSciences).toFixed(1)}</td>
+            <td class="fw-bold text-primary">${(!g.oral && nOral===0) ? '-' : Number(nOral).toFixed(1)}</td>
+            
+            <td class="bg-light fw-bold" style="border-left: 1px solid #dee2e6;">${avgEpreuves.toFixed(2)}</td>
+            <td class="bg-light">${(!g.genAvg && avgGen===0) ? '-' : Number(avgGen).toFixed(2)}</td>
+            
+            <td class="fw-bold fs-5 text-white bg-primary">
+                ${finalGrade.toFixed(2)}
+            </td>
+            
+            <td class="fw-bold ${textClass}">
+                ${mention}
+            </td>
         </tr>`;
     });
 
     html += `</tbody></table>`;
     container.innerHTML = html;
 }
-
     function sortSimulation(key) {
         if(simulSortState.key === key) { simulSortState.order = simulSortState.order === 'asc' ? 'desc' : 'asc'; } 
         else { simulSortState.key = key; simulSortState.order = 'desc'; }
@@ -1727,105 +2266,102 @@ function finalizeGeneralImport(data, type) {
 
     // 4. RELEVÉS DE NOTES (Corrigé, Complet avec Calculs)
 window.exportRelevesNotes = function(sortMode, targetId) {
-        DB.config.schoolName = document.getElementById('schoolName').value; 
-        DB.config.year = document.getElementById('sessionYear').value;
-        const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
-        const { jsPDF } = window.jspdf; 
-        const doc = new jsPDF('p', 'mm', 'a4'); 
-        let count = 0;
+    DB.config.schoolName = document.getElementById('schoolName').value; 
+    DB.config.year = document.getElementById('sessionYear').value;
+    const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
+    const { jsPDF } = window.jspdf; 
+    const doc = new jsPDF('p', 'mm', 'a4'); 
+    let count = 0;
+    
+    let studentsToPrint = (targetId && targetId !== 'all') 
+        ? DB.students.filter(s => s.id == targetId) 
+        : [...DB.students];
+    
+    studentsToPrint.sort((a,b) => { 
+        if(sortMode === 'class') { 
+            if(a.classe < b.classe) return -1; 
+            if(a.classe > b.classe) return 1; 
+        } 
+        return a.nom.localeCompare(b.nom); 
+    });
+
+    studentsToPrint.forEach((student) => {
+        if(!student.grades) student.grades = {}; 
+        if(count > 0) doc.addPage(); count++;
         
-        let studentsToPrint = (targetId && targetId !== 'all') 
-            ? DB.students.filter(s => s.id == targetId) 
-            : [...DB.students];
+        if (DB.config.logo) addSmartLogo(doc, 15, 10, 40);
+
+        doc.setFontSize(10); doc.setTextColor(100); 
+        doc.text("DNB BLANC", 195, 15, {align:'right'}); 
+        doc.text(`Session ${DB.config.year}`, 195, 20, {align:'right'});
         
-        studentsToPrint.sort((a,b) => { 
-            if(sortMode === 'class') { 
-                if(a.classe < b.classe) return -1; 
-                if(a.classe > b.classe) return 1; 
-            } 
-            return a.nom.localeCompare(b.nom); 
+        doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); 
+        doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'}); 
+        doc.setFontSize(18); doc.setTextColor(0); doc.text("RELEVÉ DE NOTES", 105, 35, {align:'center'});
+        
+        doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5); 
+        doc.rect(15, 75, 180, 20, 'FD'); 
+        doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); 
+        doc.text(`Candidat(e) : ${student.nom} ${student.prenom}`, 20, 83); 
+        doc.text(`Classe : ${student.classe}`, 150, 83); 
+        
+        // Fonctions de formatage
+        const getRaw = (v) => (v !== null && v !== undefined && v !== "") ? parseFloat(v) : null;
+        const fmt = (v) => {
+            let val = getRaw(v);
+            return (val !== null) ? val.toFixed(1) + " / 20" : "-";
+        };
+        
+        // --- CALCUL SCIENCES ---
+        let sumSci=0, cSci=0; let detSci=[];
+        if(activeSciences.includes('SVT')){ 
+            let v = getRaw(student.grades.svt); if(v!==null){ sumSci+=v; cSci++; }
+            detSci.push(`SVT: ${fmt(student.grades.svt)}`); 
+        }
+        if(activeSciences.includes('PC')){ 
+            let v = getRaw(student.grades.pc); if(v!==null){ sumSci+=v; cSci++; }
+            detSci.push(`PC: ${fmt(student.grades.pc)}`); 
+        }
+        if(activeSciences.includes('TECH')){ 
+            let v = getRaw(student.grades.tech); if(v!==null){ sumSci+=v; cSci++; }
+            detSci.push(`Techno: ${fmt(student.grades.tech)}`); 
+        }
+        const noteSci20 = cSci > 0 ? (sumSci / cSci).toFixed(1) : "Abs";
+
+        // --- CALCUL HG-EMC (CORRIGÉ) ---
+        const resHG = getDetailHGEMC(student); // Utilisation de la fonction globale de calcul
+        const noteHG20 = resHG.average !== null ? resHG.average.toFixed(1) : "Abs";
+        let detHG = resHG.detail || "Épreuve unique";
+
+        const body = [ 
+            ["Français", (getRaw(student.grades.fr) !== null ? getRaw(student.grades.fr).toFixed(1) + " / 20" : "Abs"), "Épreuve unique"], 
+            ["Mathématiques", (getRaw(student.grades.math) !== null ? getRaw(student.grades.math).toFixed(1) + " / 20" : "Abs"), "Épreuve unique"], 
+            ["Hist-Géo / EMC", (noteHG20 !== "Abs" ? noteHG20 + " / 20" : "Abs"), detHG], 
+            ["Sciences", (noteSci20 !== "Abs" ? noteSci20 + " / 20" : "Abs"), detSci.join(' | ')] 
+        ];
+        
+        doc.autoTable({ 
+            head: [['Épreuves', 'Note', 'Détail des notes']], 
+            body: body, 
+            startY: 105, 
+            theme: 'grid', 
+            headStyles: { fillColor: [44,62,80] },
+            columnStyles: { 
+                1: { halign: 'center', fontStyle: 'bold', cellWidth: 40 }, 
+                2: { fontSize: 9, cellWidth: 'auto' } 
+            }
         });
-
-        studentsToPrint.forEach((student) => {
-            if(!student.grades) student.grades = {}; 
-            if(count > 0) doc.addPage(); count++;
-            
-            if (DB.config.logo) addSmartLogo(doc, 15, 10, 40);
-
-            doc.setFontSize(10); doc.setTextColor(100); 
-            doc.text("DNB BLANC", 195, 15, {align:'right'}); 
-            doc.text(`Session ${DB.config.year}`, 195, 20, {align:'right'});
-            
-            doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); 
-            doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'}); 
-            doc.setFontSize(18); doc.setTextColor(0); doc.text("RELEVÉ DE NOTES", 105, 35, {align:'center'});
-            
-            doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5); 
-            doc.rect(15, 75, 180, 20, 'FD'); 
-            doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); 
-            doc.text(`Candidat(e) : ${student.nom} ${student.prenom}`, 20, 83); 
-            doc.text(`Classe : ${student.classe}`, 150, 83); 
-            
-            // Fonctions de formatage pour éviter "undefined" et ajouter /20
-            const getRaw = (v) => (v !== null && v !== undefined && v !== "") ? parseFloat(v) : null;
-            const fmt = (v) => {
-                let val = getRaw(v);
-                return (val !== null) ? val.toFixed(1) + " / 20" : "-";
-            };
-            
-            // --- SCIENCES ---
-            let sumSci=0, cSci=0; let detSci=[];
-            if(activeSciences.includes('SVT')){ 
-                let v = getRaw(student.grades.svt); if(v!==null){ sumSci+=v; cSci++; }
-                detSci.push(`SVT: ${fmt(student.grades.svt)}`); 
-            }
-            if(activeSciences.includes('PC')){ 
-                let v = getRaw(student.grades.pc); if(v!==null){ sumSci+=v; cSci++; }
-                detSci.push(`PC: ${fmt(student.grades.pc)}`); 
-            }
-            if(activeSciences.includes('TECH')){ 
-                let v = getRaw(student.grades.tech); if(v!==null){ sumSci+=v; cSci++; }
-                detSci.push(`Techno: ${fmt(student.grades.tech)}`); 
-            }
-            const noteSci20 = cSci > 0 ? (sumSci / cSci).toFixed(1) : "Abs";
-
-            // --- HG-EMC ---
-            const noteHG20_raw = getNoteHGEMC(student);
-            const noteHG20 = noteHG20_raw !== null ? noteHG20_raw.toFixed(1) : "Abs";
-            let detHG = "Épreuve unique";
-            if(DB.config.splitHGEMC) {
-                detHG = `HG: ${fmt(student.grades.hg)} | EMC: ${fmt(student.grades.emc)}`;
-            }
-
-            const body = [ 
-                ["Français", (getRaw(student.grades.fr) !== null ? getRaw(student.grades.fr).toFixed(1) + " / 20" : "Abs"), "Épreuve unique"], 
-                ["Mathématiques", (getRaw(student.grades.math) !== null ? getRaw(student.grades.math).toFixed(1) + " / 20" : "Abs"), "Épreuve unique"], 
-                ["Hist-Géo / EMC", (noteHG20 !== "Abs" ? noteHG20 + " / 20" : "Abs"), detHG], 
-                ["Sciences", (noteSci20 !== "Abs" ? noteSci20 + " / 20" : "Abs"), detSci.join(' | ')] 
-            ];
-            
-            doc.autoTable({ 
-                head: [['Épreuves', 'Note', 'Détail des notes']], 
-                body: body, 
-                startY: 105, 
-                theme: 'grid', 
-                headStyles: { fillColor: [44,62,80] },
-                columnStyles: { 
-                    1: { halign: 'center', fontStyle: 'bold', cellWidth: 40 }, 
-                    2: { fontSize: 9, cellWidth: 'auto' } 
-                }
-            });
-            
-            let finalY = doc.lastAutoTable.finalY + 25; 
-            if(finalY > 250) { doc.addPage(); finalY = 40; }
-            doc.setFontSize(11); doc.text(`Fait à ${DB.config.city || ""}, le ${new Date().toLocaleDateString()}`, 130, finalY, {align:'center'});            
-            doc.setFont("helvetica","bold"); doc.text(DB.config.director.civ || "Le Chef d'Établissement", 130, finalY + 5, {align:'center'}); 
-            doc.text(DB.config.director.name || "", 130, finalY + 10, {align:'center'});
-            
-            if(DB.config.signature) { try { doc.addImage(DB.config.signature, 'PNG', 110, finalY + 15, 40, 20); } catch(e) {} }
-        });
-        doc.save("Releves_Notes_DNB_Blanc.pdf");
-    };
+        
+        let finalY = doc.lastAutoTable.finalY + 25; 
+        if(finalY > 250) { doc.addPage(); finalY = 40; }
+        doc.setFontSize(11); doc.text(`Fait à ${DB.config.city || ""}, le ${new Date().toLocaleDateString()}`, 130, finalY, {align:'center'});            
+        doc.setFont("helvetica","bold"); doc.text(DB.config.director.civ || "Le Chef d'Établissement", 130, finalY + 5, {align:'center'}); 
+        doc.text(DB.config.director.name || "", 130, finalY + 10, {align:'center'});
+        
+        if(DB.config.signature) { try { doc.addImage(DB.config.signature, 'PNG', 110, finalY + 15, 40, 20); } catch(e) {} }
+    });
+    doc.save("Releves_Notes_DNB_Blanc.pdf");
+};
 
     // --- FONCTION D'AFFICHAGE AVEC FILTRES ET MEF ---
 window.renderStudents = function() { 
@@ -2373,14 +2909,12 @@ function executeDistribution() {
 // =========================================================
 
 window.exportConvocationStudents = function(targetId = null) {
-    // ... (début de la fonction inchangé) ...
     const txtArea = document.getElementById('txtConvocInfo');
     if(txtArea) txtArea.style.height = "250px"; 
 
     if(!confirm("🖨️ IMPORTANT : MODE RECTO-VERSO\n\nCertaines convocations contiennent beaucoup de texte et seront générées sur 2 pages.\n\n👉 Veuillez régler votre imprimante sur RECTO-VERSO (bords longs).")) return;
 
     const generatePDF = (sortMode, specificId) => {
-        // ... (configuration PDF inchangée) ...
         DB.config.schoolName = document.getElementById('schoolName').value; 
         DB.config.year = document.getElementById('sessionYear').value;
         const customText = document.getElementById('txtConvocInfo').value;
@@ -2424,29 +2958,49 @@ window.exportConvocationStudents = function(targetId = null) {
             doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5); 
             doc.rect(15, 45, 180, 25, 'FD');
             
+            // --- INFO ÉLÈVE ---
             doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); 
             doc.text(`Candidat(e) :  ${student.nom} ${student.prenom}`, 20, 53); 
-            doc.text(`Classe :  ${student.classe}`, 120, 53);
+            doc.text(`Classe :  ${student.classe}`, 115, 53);
             
-            if(student.anonymat) { doc.setTextColor(192, 57, 43); doc.text(`N° Anonymat :  ${student.anonymat}`, 20, 62); } 
-            else { doc.setTextColor(150); doc.setFontSize(10); doc.text("(Code non généré)", 20, 62); }
-            
+            // --- GESTION ANONYMAT (Correction appliquée) ---
+            // Si l'anonymat est vide/undefined, on n'affiche rien (pas de trou blanc moche)
+            if (student.anonymat && String(student.anonymat).trim() !== "" && String(student.anonymat) !== "undefined") {
+                doc.setTextColor(192, 57, 43); // Rouge brique
+                doc.text(`N° Anonymat :  ${student.anonymat}`, 20, 62);
+            }
+            // Pas de ELSE ici -> zone vide si pas d'anonymat
+
+            // --- GESTION SALLE & TIERS-TEMPS (Placement Dynamique) ---
+            // --- GESTION SALLE & TIERS-TEMPS (Ajustement position) ---
             doc.setTextColor(0); doc.setFontSize(12); doc.setFont("helvetica","bold"); 
-            doc.text(`Salle : ${place.room}`, 120, 62);
-            if(place.isTT) { doc.setFontSize(10); doc.setTextColor(142, 68, 173); doc.text("(Tiers-Temps)", 155, 62); }
             
+            const salleText = `Salle : ${place.room}`;
+            
+            // MODIFICATION ICI : On passe de 120 à 115 (décalage de 5mm vers la gauche)
+            const xPositionSalle = 115; 
+            
+            doc.text(salleText, xPositionSalle, 62); 
+
+            // Si Tiers-Temps, on se cale sur la nouvelle position xPositionSalle
+            if(place.isTT) { 
+                const textWidth = doc.getTextWidth(salleText);
+                const ttX = xPositionSalle + textWidth + 3; // 115 + largeur texte + marge
+
+                doc.setFontSize(10); 
+                doc.setTextColor(142, 68, 173); // Violet
+                doc.text("(Tiers-Temps)", ttX, 62); 
+            }
+            
+            // --- PLANNING ---
             doc.setTextColor(0); doc.setFont("helvetica","normal"); doc.setFontSize(11); 
             doc.text("Veuillez vous présenter aux épreuves selon le planning ci-dessous :", 15, 80);
             
             let body = [];
             DB.exams.forEach(exam => {
-                // --- CORRECTIF DATE : ON FORCE MIDI POUR ÉVITER LE BUG DU JOUR ---
-                // "2026-01-29" + "T12:00:00" = Date fixée à midi, insensible aux décalages horaires minimes
                 const dateObj = new Date(exam.date + "T12:00:00");
                 const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
                 
-                // --- FIN CORRECTIF ---
-
                 let finalStart = place.isTT ? (exam.timeTT || exam.time) : exam.time;
                 const slotType = place.isTT ? 'tt' : 'std';
                 if (exam.slots && exam.slots[slotType] && exam.slots[slotType].length > 0) {
@@ -2468,7 +3022,7 @@ window.exportConvocationStudents = function(targetId = null) {
                 columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center', fontStyle:'bold' } }
             });
             
-            // --- GESTION TEXTE ET SIGNATURE (INCHANGÉE) ---
+            // --- INFORMATIONS ET SIGNATURE ---
             let currentY = doc.lastAutoTable.finalY + 10;
             const signatureHeight = 40; const bottomMargin = 15;
             doc.setFontSize(10); doc.setFont("helvetica","normal");
@@ -3914,163 +4468,225 @@ function checkSaveStatus() {
     }
 	
 function exportSimulationXLSX() {
-        // 1. On vérifie qu'il y a des données
-        if (DB.students.length === 0) return alert("Aucun élève à exporter.");
+    if (DB.students.length === 0) return alert("Aucune donnée à exporter.");
 
-        // 2. On prépare les en-têtes du fichier Excel
-        const data = [
-            ["Nom", "Prénom", "Classe", "Moy. Écrits", "Note Oral", "Moy. Épreuves (60%)", "Moy. Générale (40%)", "NOTE FINALE DNB", "Mention"]
+    // 1. Préparation des données
+    const data = DB.students.map(s => {
+        const g = s.grades || {};
+        
+        // Récupération des notes (Sur 20)
+        const nFr = parseFloat(g.fr) || 0;
+        const nMath = parseFloat(g.math) || 0;
+        const nOral = parseFloat(g.oral) || 0;
+
+        // HG/EMC
+        let nHG = 0;
+        if (DB.config.splitHGEMC) {
+            let sum = 0, count = 0;
+            if (g.hg) { sum += parseFloat(g.hg); count++; }
+            if (g.emc) { sum += parseFloat(g.emc); count++; }
+            nHG = count > 0 ? (sum / count) : 0;
+        } else {
+            nHG = parseFloat(g.hg) || 0;
+        }
+
+        // Sciences
+        let sumSc = 0, nbSc = 0;
+        if (g.svt) { sumSc += parseFloat(g.svt); nbSc++; }
+        if (g.pc) { sumSc += parseFloat(g.pc); nbSc++; }
+        if (g.tech) { sumSc += parseFloat(g.tech); nbSc++; }
+        const nSciences = nbSc > 0 ? (sumSc / nbSc) : 0;
+
+        // Calculs Moyennes
+        const avgEpreuves = (nFr + nMath + nHG + nSciences + nOral) / 5;
+        const avgGen = parseFloat(g.genAvg) || 0;
+        
+        // Note Finale
+        let finalGrade = (avgEpreuves * 0.6) + (avgGen * 0.4);
+        finalGrade = Math.round(finalGrade * 100) / 100;
+
+        // Mention
+        let mention = "Refusé";
+        if (finalGrade >= 10) mention = "Admis";
+        if (finalGrade >= 12) mention = "Assez Bien";
+        if (finalGrade >= 14) mention = "Bien";
+        if (finalGrade >= 16) mention = "Très Bien";
+
+        return {
+            "Nom": s.nom,
+            "Prénom": s.prenom,
+            "Classe": s.classe,
+            "Français": nFr,
+            "Maths": nMath,
+            "HG/EMC": Number(nHG).toFixed(2),
+            "Sciences": Number(nSciences).toFixed(2),
+            "Oral": nOral,
+            "Moy. Épreuves (0.6)": Number(avgEpreuves).toFixed(2),
+            "Moy. Générale (0.4)": Number(avgGen).toFixed(2),
+            "NOTE FINALE / 20": Number(finalGrade).toFixed(2),
+            "Mention": mention
+        };
+    });
+
+    // 2. Génération du fichier Excel
+    const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Ajustement automatique des largeurs de colonnes
+    const wscols = Object.keys(data[0]).map(k => ({ wch: k.length + 5 }));
+    ws['!cols'] = wscols;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Simulation DNB");
+    XLSX.writeFile(wb, `Simulation_DNB_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+}
+
+/* [DEV IA] Gestion de la Pop-up de configuration PDF */
+window.openPdfOptions = function() {
+    // 1. Création de la modal si elle n'existe pas encore
+    let modal = document.getElementById('pdf-config-modal');
+    const defaultText = "Ce document est une simulation informative basée sur les résultats saisis.\nIl ne constitue pas un relevé de notes officiel.";
+
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pdf-config-modal';
+        // Styles inline pour garantir l'affichage sans CSS externe
+        modal.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; justify-content:center; align-items:center;";
+        
+        modal.innerHTML = `
+            <div style="background:white; padding:25px; border-radius:8px; width:500px; max-width:90%; box-shadow:0 10px 25px rgba(0,0,0,0.2); font-family:sans-serif;">
+                <h4 style="margin-top:0; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">🖨️ Options d'impression</h4>
+                
+                <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:0.9em;">Pied de page personnalisable :</label>
+                <textarea id="pdf-footer-text" rows="3" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; font-family:inherit; margin-bottom:20px;"></textarea>
+                
+                <div style="text-align:right;">
+                    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('pdf-config-modal').style.display='none'" style="margin-right:10px;">Annuler</button>
+                    <button class="btn btn-danger btn-sm" onclick="triggerPdfExport()">Valider et Générer</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // 2. Initialisation et Affichage
+    document.getElementById('pdf-footer-text').value = defaultText;
+    modal.style.display = 'flex';
+};
+
+/* [DEV IA] Déclencheur intermédiaire */
+window.triggerPdfExport = function() {
+    const customText = document.getElementById('pdf-footer-text').value;
+    document.getElementById('pdf-config-modal').style.display = 'none';
+    exportSimulationPDF(customText);
+};
+
+/**
+ * [DEV IA] Moteur de génération PDF (Mis à jour)
+ * @param {string} footerText - Le texte à afficher en bas de page
+ */
+window.exportSimulationPDF = function(footerText) {
+    if (DB.students.length === 0) return alert("Aucun élève dans la base.");
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let count = 0;
+    const students = [...DB.students].sort((a,b) => a.nom.localeCompare(b.nom));
+
+    students.forEach(s => {
+        const g = s.grades || {};
+
+        // --- CALCULS (Identiques) ---
+        const nHG = getNoteHGEMC(s) !== null ? getNoteHGEMC(s) : 0;
+        let sumSc = 0, nbSc = 0;
+        let detailSci = [];
+        if (g.svt != null) { sumSc += parseFloat(g.svt); nbSc++; detailSci.push(`SVT: ${g.svt}`); }
+        if (g.pc != null) { sumSc += parseFloat(g.pc); nbSc++; detailSci.push(`PC: ${g.pc}`); }
+        if (g.tech != null) { sumSc += parseFloat(g.tech); nbSc++; detailSci.push(`Tech: ${g.tech}`); }
+        const nSci = nbSc > 0 ? (sumSc / nbSc) : 0;
+
+        const nFr = parseFloat(g.fr) || 0;
+        const nMath = parseFloat(g.math) || 0;
+        const nOral = parseFloat(g.oral) || 0;
+        const moyGen = parseFloat(g.genAvg) || 0;
+        const moyEpreuves = (nFr + nMath + nHG + nSci + nOral) / 5;
+        const noteFinale = (moyEpreuves * 0.6) + (moyGen * 0.4);
+
+        let mention = "Refusé";
+        let colorMention = [200, 0, 0];
+        if (noteFinale >= 10) { mention = "Admis"; colorMention = [0, 150, 0]; }
+        if (noteFinale >= 12) mention = "Admis - Mention Assez Bien";
+        if (noteFinale >= 14) mention = "Admis - Mention Bien";
+        if (noteFinale >= 16) mention = "Admis - Mention Très Bien";
+
+        // --- RENDU PDF ---
+        if (count > 0) doc.addPage();
+        count++;
+
+        if (typeof addSmartLogo === 'function') addSmartLogo(doc, 10, 10, 30);
+        
+        doc.setFontSize(10); doc.setTextColor(100);
+        doc.text("SIMULATION DNB", 200, 15, {align:'right'});
+        doc.text(`Session ${DB.config.year}`, 200, 20, {align:'right'});
+
+        doc.setFontSize(16); doc.setTextColor(44, 62, 80); doc.setFont("helvetica", "bold");
+        doc.text(DB.config.schoolName || "Établissement", 105, 30, {align:'center'});
+        
+        doc.setFontSize(14); doc.setTextColor(0); 
+        doc.text("FICHE DE SIMULATION INDIVIDUELLE", 105, 42, {align:'center'});
+
+        // Bloc Élève
+        doc.setFillColor(245, 245, 245); doc.rect(15, 50, 180, 20, 'F');
+        doc.setDrawColor(200); doc.rect(15, 50, 180, 20, 'S');
+        doc.setFontSize(12); doc.setTextColor(0);
+        doc.text(`Élève :  ${s.nom} ${s.prenom}`, 20, 62);
+        
+        // [FIX DEV IA] Position de la classe corrigée à 120 (au lieu de 150)
+        doc.text(`Classe : ${s.classe}`, 120, 62);
+
+        // Tableau
+        const rows = [
+            ["Français (Écrit)", nFr.toFixed(2)],
+            ["Mathématiques (Écrit)", nMath.toFixed(2)],
+            ["Histoire-Géo / EMC", nHG.toFixed(2)],
+            ["Sciences (" + (detailSci.join(', ') || "Moyenne") + ")", nSci.toFixed(2)],
+            ["Oral (Soutenance)", nOral.toFixed(2)],
+            [{content: "MOYENNE ÉPREUVES (Coeff 0.6)", styles: {fillColor: [230, 230, 230], fontStyle: 'bold'}}, 
+             {content: moyEpreuves.toFixed(2), styles: {fillColor: [230, 230, 230], fontStyle: 'bold'}}],
+            [{content: "MOYENNE GÉNÉRALE (Coeff 0.4)", styles: {fillColor: [230, 230, 230], fontStyle: 'bold'}}, 
+             {content: moyGen.toFixed(2), styles: {fillColor: [230, 230, 230], fontStyle: 'bold'}}]
         ];
 
-        // 3. On récupère la configuration des sciences
-        const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
-
-        // 4. On boucle sur chaque élève pour recalculer les notes (exactement comme l'affichage)
-        DB.students.forEach(s => {
-            if(!s.grades) return;
-
-            // --- Calculs identiques à renderSimulation ---
-            
-            // Calcul Sciences
-            let sumSci = 0, countSci = 0;
-            if(activeSciences.includes('SVT') && s.grades.svt !== null) { sumSci += s.grades.svt; countSci++; }
-            if(activeSciences.includes('PC') && s.grades.pc !== null) { sumSci += s.grades.pc; countSci++; }
-            if(activeSciences.includes('TECH') && s.grades.tech !== null) { sumSci += s.grades.tech; countSci++; }
-            const moySci = countSci > 0 ? (sumSci / countSci) : null;
-
-            // Calcul Écrits
-            let sumEcrit = 0, countEcrit = 0;
-            if(s.grades.fr !== null) { sumEcrit += s.grades.fr; countEcrit++; }
-            if(s.grades.math !== null) { sumEcrit += s.grades.math; countEcrit++; }
-            if(s.grades.hg !== null) { sumEcrit += s.grades.hg; countEcrit++; }
-            if(moySci !== null) { sumEcrit += moySci; countEcrit++; }
-            const moyEcritsVal = countEcrit > 0 ? (sumEcrit / countEcrit) : 0;
-
-            // Calcul Épreuves (Écrits + Oral)
-            let sumEpreuves = sumEcrit;
-            let countEpreuves = countEcrit;
-            if(s.grades.oral !== null && s.grades.oral !== undefined) {
-                sumEpreuves += s.grades.oral;
-                countEpreuves++;
-            }
-            const moyEpreuves = countEpreuves > 0 ? (sumEpreuves / countEpreuves) : 0;
-
-            // Calcul Final
-            const moyGen = (s.grades.genAvg !== null) ? s.grades.genAvg : 0;
-            let finalAvg = 0;
-            if(moyGen > 0 && moyEpreuves > 0) finalAvg = (moyGen * 0.4) + (moyEpreuves * 0.6);
-            else if (moyEpreuves > 0) finalAvg = moyEpreuves;
-            else if (moyGen > 0) finalAvg = moyGen;
-
-            // Calcul Mention
-            let mention = "Refusé";
-            if(finalAvg >= 10) mention = "Admis";
-            if(finalAvg >= 12) mention = "Assez Bien";
-            if(finalAvg >= 14) mention = "Bien";
-            if(finalAvg >= 16) mention = "Très Bien";
-            if(finalAvg >= 18) mention = "TB (Félicitations)";
-
-            // 5. On ajoute la ligne au tableau Excel
-            data.push([
-                s.nom,
-                s.prenom,
-                s.classe,
-                parseFloat(moyEcritsVal.toFixed(2)),       // Moyenne Écrits
-                s.grades.oral !== null ? s.grades.oral : "", // Note Oral
-                parseFloat(moyEpreuves.toFixed(2)),      // Moyenne Épreuves
-                s.grades.genAvg !== null ? s.grades.genAvg : "", // Moyenne Générale
-                parseFloat(finalAvg.toFixed(2)),         // NOTE FINALE
-                mention                                  // Mention
-            ]);
+        doc.autoTable({
+            startY: 80,
+            head: [['Composante', 'Note / 20']],
+            body: rows,
+            theme: 'grid',
+            headStyles: { fillColor: [44, 62, 80], fontSize: 11 },
+            columnStyles: { 0: { cellWidth: 140 }, 1: { cellWidth: 40, halign: 'center', fontStyle: 'bold' } },
+            styles: { fontSize: 10, cellPadding: 3 }
         });
 
-        // 6. Création du fichier Excel avec SheetJS
-        const ws = XLSX.utils.aoa_to_sheet(data); // Convertit le tableau en feuille
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Simulation DNB");
-        
-        // Téléchargement
-        XLSX.writeFile(wb, "Simulation_DNB_Complet.xlsx");
-    }
-function exportSimulationXLSX() {
-        // 1. On vérifie qu'il y a des données
-        if (DB.students.length === 0) return alert("Aucun élève à exporter.");
+        // Résultat
+        const finalY = doc.lastAutoTable.finalY + 15;
+        doc.setDrawColor(0); doc.setLineWidth(0.5);
+        doc.rect(40, finalY, 130, 45);
+        doc.setFontSize(14); doc.setTextColor(0);
+        doc.text("RÉSULTAT SIMULÉ", 105, finalY + 12, {align:'center'});
+        doc.setFontSize(24); doc.setFont("helvetica", "bold");
+        doc.text(`${noteFinale.toFixed(2)} / 20`, 105, finalY + 26, {align:'center'});
+        doc.setTextColor(colorMention[0], colorMention[1], colorMention[2]);
+        doc.setFontSize(14);
+        doc.text(mention.toUpperCase(), 105, finalY + 38, {align:'center'});
 
-        // 2. On prépare les en-têtes du fichier Excel
-        const data = [
-            ["Nom", "Prénom", "Classe", "Moy. Écrits", "Note Oral", "Moy. Épreuves (60%)", "Moy. Générale (40%)", "NOTE FINALE DNB", "Mention"]
-        ];
+        // [FIX DEV IA] Pied de page dynamique (Multiligne)
+        doc.setTextColor(150); doc.setFontSize(9); doc.setFont("helvetica", "italic");
+        // split('\n') permet de gérer les sauts de ligne entrés par l'utilisateur
+        doc.text(footerText.split('\n'), 105, 275, {align:'center'});
+    });
 
-        // 3. On récupère la configuration des sciences
-        const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
+    doc.save(`Simulations_DNB_${new Date().toLocaleDateString().replace(/\//g,'-')}.pdf`);
+};
 
-        // 4. On boucle sur chaque élève pour recalculer les notes (exactement comme l'affichage)
-        DB.students.forEach(s => {
-            if(!s.grades) return;
-
-            // --- Calculs identiques à renderSimulation ---
-            
-            // Calcul Sciences
-            let sumSci = 0, countSci = 0;
-            if(activeSciences.includes('SVT') && s.grades.svt !== null) { sumSci += s.grades.svt; countSci++; }
-            if(activeSciences.includes('PC') && s.grades.pc !== null) { sumSci += s.grades.pc; countSci++; }
-            if(activeSciences.includes('TECH') && s.grades.tech !== null) { sumSci += s.grades.tech; countSci++; }
-            const moySci = countSci > 0 ? (sumSci / countSci) : null;
-
-            // Calcul Écrits
-            let sumEcrit = 0, countEcrit = 0;
-            if(s.grades.fr !== null) { sumEcrit += s.grades.fr; countEcrit++; }
-            if(s.grades.math !== null) { sumEcrit += s.grades.math; countEcrit++; }
-            if(s.grades.hg !== null) { sumEcrit += s.grades.hg; countEcrit++; }
-            if(moySci !== null) { sumEcrit += moySci; countEcrit++; }
-            const moyEcritsVal = countEcrit > 0 ? (sumEcrit / countEcrit) : 0;
-
-            // Calcul Épreuves (Écrits + Oral)
-            let sumEpreuves = sumEcrit;
-            let countEpreuves = countEcrit;
-            if(s.grades.oral !== null && s.grades.oral !== undefined) {
-                sumEpreuves += s.grades.oral;
-                countEpreuves++;
-            }
-            const moyEpreuves = countEpreuves > 0 ? (sumEpreuves / countEpreuves) : 0;
-
-            // Calcul Final
-            const moyGen = (s.grades.genAvg !== null) ? s.grades.genAvg : 0;
-            let finalAvg = 0;
-            if(moyGen > 0 && moyEpreuves > 0) finalAvg = (moyGen * 0.4) + (moyEpreuves * 0.6);
-            else if (moyEpreuves > 0) finalAvg = moyEpreuves;
-            else if (moyGen > 0) finalAvg = moyGen;
-
-            // Calcul Mention
-            let mention = "Refusé";
-            if(finalAvg >= 10) mention = "Admis";
-            if(finalAvg >= 12) mention = "Assez Bien";
-            if(finalAvg >= 14) mention = "Bien";
-            if(finalAvg >= 16) mention = "Très Bien";
-            if(finalAvg >= 18) mention = "TB (Félicitations)";
-
-            // 5. On ajoute la ligne au tableau Excel
-            data.push([
-                s.nom,
-                s.prenom,
-                s.classe,
-                parseFloat(moyEcritsVal.toFixed(2)),       // Moyenne Écrits
-                s.grades.oral !== null ? s.grades.oral : "", // Note Oral
-                parseFloat(moyEpreuves.toFixed(2)),      // Moyenne Épreuves
-                s.grades.genAvg !== null ? s.grades.genAvg : "", // Moyenne Générale
-                parseFloat(finalAvg.toFixed(2)),         // NOTE FINALE
-                mention                                  // Mention
-            ]);
-        });
-
-        // 6. Création du fichier Excel avec SheetJS
-        const ws = XLSX.utils.aoa_to_sheet(data); // Convertit le tableau en feuille
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Simulation DNB");
-        
-        // Téléchargement
-        XLSX.writeFile(wb, "Simulation_DNB_Complet.xlsx");
-    }
 function exportDatavisXLSX() {
         if (DB.students.length === 0) return alert("Aucune donnée à exporter.");
 
