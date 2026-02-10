@@ -6838,7 +6838,7 @@ window.exportPochettesPDF = function() {
             const pvX = M; const pvW = HALF_W - (2*M); const pvCenterX = M + (pvW/2);
             
             // LOGO (Gauche)
-            addSmartLogo(doc, pvX, 10, 45);
+            if (typeof addSmartLogo === "function") addSmartLogo(doc, pvX, 10, 45);
 
             doc.setFontSize(16); doc.setTextColor(0); doc.setFont("helvetica", "bold");
             doc.text("PROCÈS-VERBAL DE SALLE", pvCenterX, 20, {align:'center'});
@@ -6847,8 +6847,6 @@ window.exportPochettesPDF = function() {
             doc.setDrawColor(0); doc.setLineWidth(0.4); doc.rect(pvX, 35, pvW, 25);
             doc.setFontSize(11);
             doc.text(`ÉPREUVE : ${exam.name}`, pvX + 5, 42);
-            
-            // --- CORRECTIF 1 : PV (Gauche) ---
             doc.text(`DATE : ${new Date(exam.date + "T12:00:00").toLocaleDateString('fr-FR')}`, pvX + 5, 52); 
 
             doc.text(`SALLE : ${room.nom}`, pvX + 90, 42);
@@ -6880,7 +6878,7 @@ window.exportPochettesPDF = function() {
             const covX = HALF_W + M; const covW = HALF_W - (2*M); const covCenterX = covX + (covW/2);
             
             // LOGO (Droite)
-            addSmartLogo(doc, covX, 10, 45);
+            if (typeof addSmartLogo === "function") addSmartLogo(doc, covX, 10, 45);
 
             doc.setFontSize(22); doc.setTextColor(44, 62, 80); doc.setFont("helvetica", "bold");
             doc.text(`DNB BLANC ${year}`, covCenterX, 30, {align:'center'});
@@ -6891,8 +6889,6 @@ window.exportPochettesPDF = function() {
             doc.text("ÉPREUVE :", covX + 5, startY + 10); doc.setFont("helvetica", "normal"); doc.text(exam.name.toUpperCase(), covX + 35, startY + 10);
             
             doc.setFont("helvetica", "bold"); doc.text("DATE :", covX + 5, startY + 20); 
-            
-            // --- CORRECTIF 2 : COUVERTURE (Droite) ---
             doc.setFont("helvetica", "normal"); doc.text(new Date(exam.date + "T12:00:00").toLocaleDateString('fr-FR'), covX + 35, startY + 20);
 
             doc.setFont("helvetica", "bold"); doc.text("SALLE :", covX + 5, startY + 30); doc.setFontSize(16); doc.text(room.nom, covX + 35, startY + 30);
@@ -6903,12 +6899,14 @@ window.exportPochettesPDF = function() {
 
             const currentSlots = room.isTT ? slotsTT : slotsStd;
             const roomType = room.isTT ? 'tt' : 'std';
-            const nbSurv = DB.config.nbSurv || 1;
+            
             let scheduleData = [];
             currentSlots.forEach((slot, sIdx) => {
                 let profs = [];
                 const slotKeyIdx = slot.originalIdx !== undefined ? slot.originalIdx : 0;
-                for(let i=0; i<nbSurv; i++) {
+                
+                // MODIFICATION ICI : On cherche jusqu'à 10 surveillants au lieu de s'arrêter à DB.config.nbSurv
+                for(let i=0; i<10; i++) {
                     const key = `${examIdx}_${room.nom}_${roomType}_${slotKeyIdx}_${i}`;
                     if(DB.planning[key]) profs.push(DB.planning[key]);
                 }
