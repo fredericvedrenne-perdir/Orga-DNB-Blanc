@@ -806,7 +806,7 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
 3. FIN D'ÉPREUVE ET COPIES
 - Les élèves ne doivent pas inscrire leur nom sur leurs copies. Seul le numéro d'anonymat doit figurer.
 - Les élèves émargent avant de sortir.
-- Les copies classées par numéro d'anonymat sont à ramener au secrétariat dès la fin des épreuves.</textarea>
+- Les copies classées dans l'ordre de la liste d'émargement sont à ramener au secrétariat dès la fin des épreuves.</textarea>
                 </div>
 
                 <div id="edit-zone-eleves" class="edit-zone" style="display:none;">
@@ -935,7 +935,8 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
                 </div>
                 
                 <div style="padding:20px; background:#f8f9fa; border:1px solid #ddd; border-radius:8px; text-align:center;">
-                    <button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportConvocationStudents()">🖨️ Imprimer les Convocations</button>
+                    	<button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportPochettesConvocationsPDF()">🖨️ Imprimer les Pochetets de classe pour les Convocations</button>
+<button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportConvocationStudents()">🖨️ Imprimer les Convocations</button>
                 </div>
             </div>
         </div>
@@ -3139,7 +3140,7 @@ function executeDistribution() {
     function addMinutes(time, mins) { if(!time) return "??:??"; const [h, m] = time.split(':').map(Number); const date = new Date(); date.setHours(h, m + mins); return date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
     
     // [PDF Exports]
-    function drawHeader(doc, title, subtitle) { addSmartLogo(doc, 10, 10, 35); doc.setFontSize(18); doc.text(DB.config.schoolName, 40, 20); doc.setFontSize(14); doc.text("DNB Blanc - Session " + DB.config.year, 40, 28); doc.setFontSize(16); doc.text(title, 14, 45); if(subtitle) { doc.setFontSize(12); doc.text(subtitle, 14, 52); } return 60; }
+    function drawHeader(doc, title, subtitle) { addSmartLogo(doc, 10, 10, 35); doc.setFontSize(18); doc.text(DB.config.schoolName, 60, 20); doc.setFontSize(14); doc.text("DNB Blanc - Session " + DB.config.year, 60, 28); doc.setFontSize(16); doc.text(title, 14, 45); if(subtitle) { doc.setFontSize(12); doc.text(subtitle, 14, 52); } return 60; }
     function exportDisplayPDF() { const { jsPDF } = window.jspdf; const doc = new jsPDF(); let pageCount = 0; DB.rooms.forEach((r) => { if ((DB.distribution[r.nom] || []).length === 0) return; if (pageCount > 0) doc.addPage(); drawHeader(doc, `Liste d'affichage - Salle ${r.nom}`, r.isTT ? "Tiers-Temps" : "Standard"); const body = (DB.distribution[r.nom] || []).map(s => [s.nom, s.prenom, s.classe, s.anonymat, s.tt ? "OUI" : ""]); doc.autoTable({ head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT']], body: body, startY: 60 }); pageCount++; }); doc.save("listes_affichage.pdf"); }
     function exportSignPDF() { const { jsPDF } = window.jspdf; const doc = new jsPDF(); let pageCount = 0; DB.exams.forEach(exam => { DB.rooms.forEach(room => { if ((DB.distribution[room.nom] || []).length === 0) return; if (pageCount > 0) doc.addPage(); const dur = room.isTT ? exam.durTT : exam.durStd; const startTime = room.isTT ? (exam.timeTT || exam.time) : exam.time; const endTime = addMinutes(startTime, dur); drawHeader(doc, `Émargement - ${exam.name} - Salle ${room.nom}`, `Date: ${exam.date} | Horaire: ${startTime} - ${endTime}`); const body = (DB.distribution[room.nom] || []).map(s => [s.nom, s.prenom, s.classe, s.anonymat, s.tt ? "TT" : "", ""]); doc.autoTable({ head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT', 'Signature']], body: body, startY: 65, columnStyles: { 4: { minCellWidth: 40 } } }); pageCount++; }); }); doc.save("feuilles_emargement.pdf"); }
 
@@ -6905,12 +6906,12 @@ window.exportPochettesPDF = function() {
                 let profs = [];
                 const slotKeyIdx = slot.originalIdx !== undefined ? slot.originalIdx : 0;
                 
-                // MODIFICATION ICI : On cherche jusqu'à 10 surveillants au lieu de s'arrêter à DB.config.nbSurv
                 for(let i=0; i<10; i++) {
                     const key = `${examIdx}_${room.nom}_${roomType}_${slotKeyIdx}_${i}`;
                     if(DB.planning[key]) profs.push(DB.planning[key]);
                 }
-                scheduleData.push([ `${slot.start} - ${slot.end}`, profs.join("\n") ]);
+                // MODIFICATION : On sépare par " / " au lieu de "\n"
+                scheduleData.push([ `${slot.start} - ${slot.end}`, profs.join(" / ") ]);
             });
 
             doc.autoTable({
@@ -7870,6 +7871,88 @@ function getDetailHGEMC(student) {
         };
     }
 }
+
+window.exportPochettesConvocationsPDF = function() {
+    if (!DB.students || DB.students.length === 0) return alert("Veuillez d'abord charger la liste des élèves.");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a3'); 
+    
+    const classes = [...new Set(DB.students.map(s => s.classe))].sort();
+    const year = DB.config.year || "2026";
+    const schoolName = DB.config.schoolName || "Établissement";
+    
+    const PG_H = 297; const HALF_W = 210; const M = 15;
+
+    classes.forEach((className, idx) => {
+        if (idx > 0) doc.addPage("a3", "l");
+
+        // --- RECTO (DROITE) : COUVERTURE ---
+        const covX = HALF_W + M; 
+        const covW = HALF_W - (2*M); 
+        const covCenterX = covX + (covW/2);
+
+        if (typeof addSmartLogo === "function") { addSmartLogo(doc, covX, 15, 45); }
+        doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
+        doc.text(schoolName, covX + 65, 25); 
+
+        doc.setFontSize(28); doc.setTextColor(44, 62, 80);
+        doc.text("CONVOCATIONS ÉLÈVES", covCenterX, 95, {align:'center'});
+        doc.setFontSize(20);
+        doc.text(`DNB BLANC - SESSION ${year}`, covCenterX, 110, {align:'center'});
+
+        doc.setDrawColor(44, 62, 80); doc.setLineWidth(1.5);
+        doc.rect(covX + 35, 135, covW - 70, 55);
+        doc.setFontSize(75);
+        doc.text(className, covCenterX, 178, {align:'center'});
+
+        // --- VERSO (GAUCHE) : DOUBLE COLONNE ---
+        const listX = M;
+        const listW = HALF_W - (2*M);
+        const colW = (listW / 2) - 5; // Largeur d'une colonne avec petit espace entre les deux
+
+        const classStudents = DB.students
+            .filter(s => s.classe === className)
+            .sort((a, b) => a.nom.localeCompare(b.nom));
+
+        // On sépare la liste en deux
+        const mid = Math.ceil(classStudents.length / 2);
+        const col1 = classStudents.slice(0, mid).map(s => [s.nom, s.prenom, ""]);
+        const col2 = classStudents.slice(mid).map(s => [s.nom, s.prenom, ""]);
+
+        const tableConfig = {
+            theme: 'grid',
+            headStyles: { fillColor: [44, 62, 80], fontSize: 9, cellPadding: 2 },
+            styles: { fontSize: 10, cellPadding: 3, valign: 'middle' }, // Taille remise à 10 pour la lisibilité
+            columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 25 }, 2: { cellWidth: 'auto' } },
+            startY: 15
+        };
+
+        // Colonne 1
+        doc.autoTable({
+            ...tableConfig,
+            head: [['Nom', 'Prén.', 'Signat.']],
+            body: col1,
+            margin: { left: listX },
+            tableWidth: colW
+        });
+
+        // Colonne 2
+        doc.autoTable({
+            ...tableConfig,
+            head: [['Nom', 'Prén.', 'Signat.']],
+            body: col2,
+            margin: { left: listX + colW + 10 },
+            tableWidth: colW
+        });
+
+        // Ligne de pliure centrale
+        doc.setDrawColor(220); doc.setLineDash([5, 5], 0);
+        doc.line(HALF_W, 0, HALF_W, PG_H); doc.setLineDash([]);
+    });
+
+    doc.save(`Pochettes_Convocations_${year}.pdf`);
+};
 
 </script>
 
