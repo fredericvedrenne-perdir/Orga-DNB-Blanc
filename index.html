@@ -935,7 +935,7 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
                 </div>
                 
                 <div style="padding:20px; background:#f8f9fa; border:1px solid #ddd; border-radius:8px; text-align:center;">
-                    	<button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportPochettesConvocationsPDF()">🖨️ Imprimer les Pochetets de classe pour les Convocations</button>
+                    	<button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportPochettesConvocationsPDF()">🖨️ Imprimer les Pochettes de classe pour les Convocations</button>
 <button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportConvocationStudents()">🖨️ Imprimer les Convocations</button>
                 </div>
             </div>
@@ -973,6 +973,7 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
                 <h3>Relevés de Notes (DNB Blanc)</h3>
                 <p>Générez les relevés de notes individuels (Mise en page officielle).</p>
                 <div style="padding:20px; background:#f8f9fa; border:1px solid #ddd; border-radius:8px; text-align:center;">
+				<button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="exportFolderCoversNotes()">🖨️ Imprimer les Pochettes de classe pour les Relevés de Notes</button>
                     <button class="btn btn-primary" style="font-size:1.1rem; padding:10px 20px;" onclick="openReleveOptions()">🖨️ Imprimer Relevés de Notes</button>
                 </div>
             </div>
@@ -3151,128 +3152,165 @@ function executeDistribution() {
 // === EXPORT CONVOCATIONS ÉLÈVES (VERSION V4 - TEXTE LONG) ===
 // =========================================================
 
+// =========================================================
+// === EXPORT CONVOCATIONS ÉLÈVES (MISE À JOUR : HEURE DE FIN) ===
+// =========================================================
+// =========================================================
+// === EXPORT CONVOCATIONS ÉLÈVES (V3 : TITRES CENTRÉS) ===
+// =========================================================
 window.exportConvocationStudents = function(targetId = null) {
     const txtArea = document.getElementById('txtConvocInfo');
-    if(txtArea) txtArea.style.height = "250px"; 
-
+    if(txtArea) txtArea.style.height = "250px";
+    
     if(!confirm("🖨️ IMPORTANT : MODE RECTO-VERSO\n\nCertaines convocations contiennent beaucoup de texte et seront générées sur 2 pages.\n\n👉 Veuillez régler votre imprimante sur RECTO-VERSO (bords longs).")) return;
 
     const generatePDF = (sortMode, specificId) => {
-        DB.config.schoolName = document.getElementById('schoolName').value; 
+        DB.config.schoolName = document.getElementById('schoolName').value;
         DB.config.year = document.getElementById('sessionYear').value;
         const customText = document.getElementById('txtConvocInfo').value;
-        const { jsPDF } = window.jspdf; 
-        const doc = new jsPDF('p', 'mm', 'a4'); 
         
-        const PAGE_W = 210; const PAGE_H = 297; const MARGIN = 20; const TEXT_WIDTH = PAGE_W - (MARGIN * 2);
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const PAGE_W = 210;
+        const PAGE_H = 297;
+        const MARGIN = 20;
+        const TEXT_WIDTH = PAGE_W - (MARGIN * 2);
+        
         let count = 0;
-        
         let studentsToPrint = [];
-        if (specificId && typeof specificId !== 'object') studentsToPrint = DB.students.filter(s => s.id == specificId); 
-        else studentsToPrint = [...DB.students]; 
         
-        studentsToPrint.sort((a,b) => { 
-            if(sortMode === 'class') { if(a.classe < b.classe) return -1; if(a.classe > b.classe) return 1; return a.nom.localeCompare(b.nom); } 
-            return a.nom.localeCompare(b.nom); 
+        if (specificId && typeof specificId !== 'object') studentsToPrint = DB.students.filter(s => s.id == specificId);
+        else studentsToPrint = [...DB.students];
+        
+        studentsToPrint.sort((a,b) => {
+            if(sortMode === 'class') {
+                if(a.classe < b.classe) return -1;
+                if(a.classe > b.classe) return 1;
+                return a.nom.localeCompare(b.nom);
+            }
+            return a.nom.localeCompare(b.nom);
         });
 
         if(studentsToPrint.length === 0) return alert("Aucun élève à imprimer.");
-        
+
+        // Cartographie des places
         let studentPlacement = {};
-        DB.rooms.forEach(r => { (DB.distribution[r.nom]||[]).forEach(s => { studentPlacement[s.id] = { room: r.nom, isTT: r.isTT }; }); });
+        DB.rooms.forEach(r => {
+            (DB.distribution[r.nom]||[]).forEach(s => {
+                studentPlacement[s.id] = { room: r.nom, isTT: r.isTT };
+            });
+        });
 
         studentsToPrint.forEach((student) => {
-            const place = studentPlacement[student.id]; 
-            if(!place) return; 
+            const place = studentPlacement[student.id];
+            if(!place) return;
             
-            if(count > 0) doc.addPage(); count++;
+            if(count > 0) doc.addPage();
+            count++;
 
             // --- HEADER ---
             if(typeof addSmartLogo === 'function') addSmartLogo(doc, 15, 10, 45);
-
-            doc.setFontSize(10); doc.setTextColor(100); 
-            doc.text("DNB BLANC", 195, 15, {align:'right'}); 
+            doc.setFontSize(10); doc.setTextColor(100);
+            doc.text("DNB BLANC", 195, 15, {align:'right'});
             doc.text(`Session ${DB.config.year}`, 195, 20, {align:'right'});
             
-            doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); 
+            doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold");
             doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'});
-            doc.setFontSize(18); doc.setTextColor(0); doc.text("CONVOCATION", 105, 35, {align:'center'});
             
-            doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5); 
+            doc.setFontSize(18); doc.setTextColor(0);
+            doc.text("CONVOCATION", 105, 35, {align:'center'});
+            
+            doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5);
             doc.rect(15, 45, 180, 25, 'FD');
-            
+
             // --- INFO ÉLÈVE ---
-            doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); 
-            doc.text(`Candidat(e) :  ${student.nom} ${student.prenom}`, 20, 53); 
-            doc.text(`Classe :  ${student.classe}`, 115, 53);
-            
-            // --- GESTION ANONYMAT (Correction appliquée) ---
-            // Si l'anonymat est vide/undefined, on n'affiche rien (pas de trou blanc moche)
+            doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold");
+            doc.text(`Candidat(e) : ${student.nom} ${student.prenom}`, 20, 53);
+            doc.text(`Classe : ${student.classe}`, 115, 53);
+
             if (student.anonymat && String(student.anonymat).trim() !== "" && String(student.anonymat) !== "undefined") {
-                doc.setTextColor(192, 57, 43); // Rouge brique
-                doc.text(`N° Anonymat :  ${student.anonymat}`, 20, 62);
+                doc.setTextColor(192, 57, 43);
+                doc.text(`N° Anonymat : ${student.anonymat}`, 20, 62);
             }
-            // Pas de ELSE ici -> zone vide si pas d'anonymat
 
-            // --- GESTION SALLE & TIERS-TEMPS (Placement Dynamique) ---
-            // --- GESTION SALLE & TIERS-TEMPS (Ajustement position) ---
-            doc.setTextColor(0); doc.setFontSize(12); doc.setFont("helvetica","bold"); 
-            
+            // --- SALLE ---
+            doc.setTextColor(0); doc.setFontSize(12); doc.setFont("helvetica","bold");
             const salleText = `Salle : ${place.room}`;
-            
-            // MODIFICATION ICI : On passe de 120 à 115 (décalage de 5mm vers la gauche)
-            const xPositionSalle = 115; 
-            
-            doc.text(salleText, xPositionSalle, 62); 
+            const xPositionSalle = 115;
+            doc.text(salleText, xPositionSalle, 62);
 
-            // Si Tiers-Temps, on se cale sur la nouvelle position xPositionSalle
-            if(place.isTT) { 
+            if(place.isTT) {
                 const textWidth = doc.getTextWidth(salleText);
-                const ttX = xPositionSalle + textWidth + 3; // 115 + largeur texte + marge
-
-                doc.setFontSize(10); 
-                doc.setTextColor(142, 68, 173); // Violet
-                doc.text("(Tiers-Temps)", ttX, 62); 
+                const ttX = xPositionSalle + textWidth + 3;
+                doc.setFontSize(10); doc.setTextColor(142, 68, 173);
+                doc.text("(Tiers-Temps)", ttX, 62);
             }
-            
+
             // --- PLANNING ---
-            doc.setTextColor(0); doc.setFont("helvetica","normal"); doc.setFontSize(11); 
+            doc.setTextColor(0); doc.setFont("helvetica","normal"); doc.setFontSize(11);
             doc.text("Veuillez vous présenter aux épreuves selon le planning ci-dessous :", 15, 80);
-            
+
             let body = [];
             DB.exams.forEach(exam => {
                 const dateObj = new Date(exam.date + "T12:00:00");
                 const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
                 
-                let finalStart = place.isTT ? (exam.timeTT || exam.time) : exam.time;
                 const slotType = place.isTT ? 'tt' : 'std';
+                let finalStart = place.isTT ? (exam.timeTT || exam.time) : exam.time;
+                let finalEnd = "";
+                let finalDurVal = place.isTT ? exam.durTT : exam.durStd;
+
                 if (exam.slots && exam.slots[slotType] && exam.slots[slotType].length > 0) {
                     finalStart = exam.slots[slotType][0].start;
+                    const lastSlot = exam.slots[slotType][exam.slots[slotType].length - 1];
+                    finalEnd = lastSlot.end; 
+                } else {
+                    finalEnd = addMinutes(finalStart, finalDurVal);
                 }
-                let finalDurVal = place.isTT ? exam.durTT : exam.durStd;
                 
-                body.push([ 
-                    dateStr.charAt(0).toUpperCase() + dateStr.slice(1), 
-                    exam.name, 
-                    finalStart, 
-                    `${finalDurVal} min` 
+                body.push([
+                    dateStr.charAt(0).toUpperCase() + dateStr.slice(1),
+                    exam.name,
+                    finalStart,
+                    finalEnd
                 ]);
             });
-            
+
             doc.autoTable({
-                head: [['Date', 'Épreuve', 'Début', 'Durée']], body: body, startY: 85, theme: 'grid', 
-                headStyles: { fillColor: [44,62,80] }, styles: { cellPadding: 3, valign: 'middle', fontSize:10 }, 
-                columnStyles: { 2: { halign: 'center' }, 3: { halign: 'center', fontStyle:'bold' } }
+                head: [['Date', 'Épreuve', 'Début', 'Fin']],
+                body: body,
+                startY: 85,
+                theme: 'grid',
+                headStyles: { 
+                    fillColor: [44,62,80],
+                    halign: 'center', // <--- C'est ici que ça se joue : Centre TOUS les titres
+                    valign: 'middle'
+                },
+                styles: { 
+                    cellPadding: 3, 
+                    valign: 'middle', 
+                    fontSize: 10
+                },
+                columnStyles: { 
+                    0: { halign: 'left' },   // Date : Texte à gauche
+                    1: { halign: 'left' },   // Épreuve : Texte à gauche
+                    2: { halign: 'center' }, // Début : Texte centré
+                    3: { halign: 'center', fontStyle:'bold' } // Fin : Texte centré et gras
+                }
             });
-            
-            // --- INFORMATIONS ET SIGNATURE ---
+
+            // --- INFORMATIONS & VERSO ---
             let currentY = doc.lastAutoTable.finalY + 10;
-            const signatureHeight = 40; const bottomMargin = 15;
+            const signatureHeight = 40;
+            const bottomMargin = 15;
+            
             doc.setFontSize(10); doc.setFont("helvetica","normal");
-            const textLines = doc.splitTextToSize(customText, TEXT_WIDTH); 
-            const textHeight = textLines.length * 5; 
+            const textLines = doc.splitTextToSize(customText, TEXT_WIDTH);
+            const textHeight = textLines.length * 5;
+            
             const spaceRemaining = PAGE_H - currentY - bottomMargin;
             const spaceNeededTotal = textHeight + signatureHeight + 10;
+            
             let signatureY = 0;
 
             if(spaceNeededTotal < spaceRemaining) {
@@ -3283,63 +3321,90 @@ window.exportConvocationStudents = function(targetId = null) {
                 const boxH = 16;
                 doc.setDrawColor(192, 57, 43); doc.setLineWidth(0.8); doc.setFillColor(250, 229, 211);
                 doc.roundedRect(MARGIN, currentY, TEXT_WIDTH, boxH, 2, 2, 'FD');
-                doc.setFillColor(241, 196, 15); doc.triangle(MARGIN+5, currentY+11, MARGIN+8, currentY+5, MARGIN+11, currentY+11, 'F');
+                doc.setFillColor(241, 196, 15);
+                doc.triangle(MARGIN+5, currentY+11, MARGIN+8, currentY+5, MARGIN+11, currentY+11, 'F');
+                
                 doc.setFontSize(11); doc.setTextColor(192, 57, 43); doc.setFont("helvetica","bold");
                 doc.text("VOIR CONSIGNES DÉTAILLÉES AU VERSO", 105, currentY + 10, {align:'center'});
+                
                 signatureY = currentY + 30;
-
-                doc.addPage(); 
-                doc.setFontSize(16); doc.setTextColor(44,62,80); doc.text("CONSIGNES & INFORMATIONS", 105, 20, {align:'center'});
-                doc.setDrawColor(200); doc.setLineWidth(0.5); doc.line(MARGIN, 25, PAGE_W - MARGIN, 25);
+                
+                doc.addPage();
+                doc.setFontSize(16); doc.setTextColor(44,62,80);
+                doc.text("CONSIGNES & INFORMATIONS", 105, 20, {align:'center'});
+                doc.setDrawColor(200); doc.setLineWidth(0.5);
+                doc.line(MARGIN, 25, PAGE_W - MARGIN, 25);
+                
                 doc.setFontSize(11); doc.setTextColor(0); doc.setFont("helvetica","normal");
                 const versoLines = doc.splitTextToSize(customText, TEXT_WIDTH);
                 doc.text(versoLines, MARGIN, 35);
-                doc.setPage(doc.internal.getNumberOfPages() - 1); 
+                doc.setPage(doc.internal.getNumberOfPages() - 1);
             }
+
+            // --- SIGNATURE ---
+            const centerX = 140;
+            if(signatureY > 260) signatureY = 260;
             
-            const centerX = 140; if(signatureY > 260) signatureY = 260;
             doc.setTextColor(0); doc.setFontSize(11); doc.setFont("helvetica","normal");
             doc.text(`Fait à ${DB.config.city || "SJI"}, le ${new Date().toLocaleDateString()}`, centerX, signatureY, {align:'center'});
-            doc.setFont("helvetica","bold"); doc.text(DB.config.director.civ || "Le Chef d'Établissement", centerX, signatureY + 5, {align:'center'}); 
+            
+            doc.setFont("helvetica","bold");
+            doc.text(DB.config.director.civ || "Le Chef d'Établissement", centerX, signatureY + 5, {align:'center'});
             doc.text(DB.config.director.name || "", centerX, signatureY + 10, {align:'center'});
             
-            if(DB.config.signature) { 
-                try { 
-                    const imgProps = doc.getImageProperties(DB.config.signature); 
-                    const ratio = imgProps.width / imgProps.height; const h = 20; const w = h * ratio; 
-                    doc.addImage(DB.config.signature, 'PNG', centerX - (w/2), signatureY+15, w, h); 
-                } catch(e) {} 
+            if(DB.config.signature) {
+                try {
+                    const imgProps = doc.getImageProperties(DB.config.signature);
+                    const ratio = imgProps.width / imgProps.height;
+                    const h = 20; const w = h * ratio;
+                    doc.addImage(DB.config.signature, 'PNG', centerX - (w/2), signatureY+15, w, h);
+                } catch(e) {}
             }
         });
+        
         doc.save(`Convocations_Eleves_${sortMode||'Single'}.pdf`);
     };
 
-    if (targetId && typeof targetId !== 'object' && targetId !== 'all') { generatePDF(null, targetId); return; }
-    
+    if (targetId && typeof targetId !== 'object' && targetId !== 'all') {
+        generatePDF(null, targetId);
+        return;
+    }
+
     // --- POPUP CHOIX TRI ---
     const overlay = document.createElement('div');
     Object.assign(overlay.style, { position:'fixed', top:'0', left:'0', width:'100%', height:'100%', backgroundColor:'rgba(0,0,0,0.6)', zIndex:'9999', display:'flex', justifyContent:'center', alignItems:'center' });
+    
     const modal = document.createElement('div');
     Object.assign(modal.style, { backgroundColor:'white', padding:'30px', borderRadius:'12px', boxShadow:'0 10px 25px rgba(0,0,0,0.2)', textAlign:'center', maxWidth:'600px', width:'90%', fontFamily:'Helvetica, sans-serif' });
+    
     modal.innerHTML = `<h3 style="color:#2c3e50; margin-top:0;">🖨️ Imprimer les Convocations</h3>`;
+    
     const btnContainer = document.createElement('div');
     Object.assign(btnContainer.style, { display:'flex', gap:'20px', marginTop:'25px', justifyContent:'center' });
-    
+
     function createCard(emoji, title, desc, color, action) {
         const card = document.createElement('div');
         Object.assign(card.style, { flex:'1', padding:'20px', border:'2px solid #eee', borderRadius:'10px', cursor:'pointer', transition:'all 0.2s', backgroundColor:'#f8f9fa' });
         card.innerHTML = `<div style="font-size:40px; margin-bottom:10px;">${emoji}</div><div style="font-weight:bold; color:${color}; font-size:16px;">${title}</div><div style="font-size:12px; color:#7f8c8d; margin-top:5px;">${desc}</div>`;
+        
         card.onclick = () => { document.body.removeChild(overlay); action(); };
         return card;
     }
+
     const btnClass = createCard("🏫", "Par Classe", "Trié par classe puis par nom", "#27ae60", () => generatePDF('class'));
     const btnAlpha = createCard("🌍", "Alphabétique", "Trié de A à Z", "#2980b9", () => generatePDF('alpha'));
-    btnContainer.append(btnClass, btnAlpha); modal.appendChild(btnContainer);
-    
+
+    btnContainer.append(btnClass, btnAlpha);
+    modal.appendChild(btnContainer);
+
     const btnCancel = document.createElement('div');
-    btnCancel.innerText = "Annuler"; Object.assign(btnCancel.style, { marginTop:"20px", color:"#999", cursor:"pointer", fontSize:"14px", textDecoration:"underline" });
-    btnCancel.onclick = () => document.body.removeChild(overlay); modal.appendChild(btnCancel);
-    overlay.appendChild(modal); document.body.appendChild(overlay);
+    btnCancel.innerText = "Annuler";
+    Object.assign(btnCancel.style, { marginTop:"20px", color:"#999", cursor:"pointer", fontSize:"14px", textDecoration:"underline" });
+    btnCancel.onclick = () => document.body.removeChild(overlay);
+    modal.appendChild(btnCancel);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
 };
 
 
@@ -7872,7 +7937,124 @@ function getDetailHGEMC(student) {
     }
 }
 
+// =========================================================
+// === EXPORT POCHETTES CONVOCATIONS (A3 PLIÉ - OPTIMISÉ) ===
+// =========================================================
 window.exportPochettesConvocationsPDF = function() {
+    // 1. Sécurité
+    if (!DB.students || DB.students.length === 0) return alert("Veuillez d'abord charger la liste des élèves.");
+
+    const { jsPDF } = window.jspdf;
+    // Format A3 Paysage : Largeur 420mm x Hauteur 297mm
+    // Plié en deux, cela fait une chemise A4.
+    const doc = new jsPDF('l', 'mm', 'a3'); 
+    
+    const classes = [...new Set(DB.students.map(s => s.classe))].sort();
+    const year = DB.config.year || new Date().getFullYear();
+    const schoolName = DB.config.schoolName || "Établissement";
+    
+    const PG_H = 297; 
+    const HALF_W = 210; // Milieu de la page (pliure)
+    const M = 15; // Marge globale
+
+    classes.forEach((className, idx) => {
+        if (idx > 0) doc.addPage("a3", "l");
+
+        // ===================================================
+        // === PARTIE DROITE (RECTO) : COUVERTURE ===
+        // ===================================================
+        const covX = HALF_W + M; 
+        const covW = HALF_W - (2*M); 
+        const covCenterX = covX + (covW/2);
+
+        // Logo (si disponible)
+        if (typeof addSmartLogo === "function") { addSmartLogo(doc, covX, 15, 45); }
+        
+        // En-tête Établissement
+        doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
+        doc.text(schoolName, covX + 65, 25); 
+
+        // Titres
+        doc.setFontSize(28); doc.setTextColor(44, 62, 80);
+        doc.text("CONVOCATIONS ÉLÈVES", covCenterX, 95, {align:'center'});
+        
+        doc.setFontSize(20);
+        doc.text(`DNB BLANC - SESSION ${year}`, covCenterX, 110, {align:'center'});
+
+        // Cadre et Classe
+        doc.setDrawColor(44, 62, 80); doc.setLineWidth(1.5);
+        doc.rect(covX + 35, 135, covW - 70, 55);
+        
+        doc.setFontSize(75);
+        doc.text(className, covCenterX, 178, {align:'center'});
+
+        // ===================================================
+        // === PARTIE GAUCHE (VERSO) : LISTE D'ÉMARGEMENT ===
+        // ===================================================
+        const listX = M;
+        const listW = HALF_W - (2*M);
+        // On divise la largeur disponible en deux colonnes de tableaux
+        const colW = (listW / 2) - 5; 
+
+        // Récupération et tri des élèves
+        const classStudents = DB.students
+            .filter(s => s.classe === className)
+            .sort((a, b) => a.nom.localeCompare(b.nom));
+
+        // Découpage de la liste en deux (Haut -> Bas, puis changement de colonne)
+        const mid = Math.ceil(classStudents.length / 2);
+        
+        // --- MODIFICATION ICI : Fusion Nom + Prénom ---
+        const mapStudentRow = (s) => [`${s.nom} ${s.prenom}`, ""];
+        
+        const col1 = classStudents.slice(0, mid).map(mapStudentRow);
+        const col2 = classStudents.slice(mid).map(mapStudentRow);
+
+        const tableConfig = {
+            theme: 'grid',
+            headStyles: { fillColor: [44, 62, 80], fontSize: 9, cellPadding: 2, halign: 'center' },
+            styles: { fontSize: 10, cellPadding: 3, valign: 'middle', lineColor: [200] },
+            columnStyles: { 
+                0: { cellWidth: 50, fontStyle: 'bold' }, // Nom Prénom : 5cm de large
+                1: { cellWidth: 'auto' } // Signature : Prend tout le reste (environ 3.5cm)
+            },
+            startY: 15
+        };
+
+        // Tableau Colonne 1 (Gauche de la page de gauche)
+        doc.autoTable({
+            ...tableConfig,
+            head: [['Nom Prénom', 'Émargement']], // Titres fusionnés
+            body: col1,
+            margin: { left: listX },
+            tableWidth: colW
+        });
+
+        // Tableau Colonne 2 (Droite de la page de gauche)
+        doc.autoTable({
+            ...tableConfig,
+            head: [['Nom Prénom', 'Émargement']],
+            body: col2,
+            margin: { left: listX + colW + 10 }, // Décalage pour le 2ème tableau
+            tableWidth: colW
+        });
+
+        // ===================================================
+        // === FINITIONS ===
+        // ===================================================
+        // Ligne de pliure centrale (pointillés discrets)
+        doc.setDrawColor(220); doc.setLineDash([5, 5], 0);
+        doc.line(HALF_W, 0, HALF_W, PG_H); 
+        doc.setLineDash([]);
+    });
+
+    doc.save(`Pochettes_Convocations_${year}.pdf`);
+};
+
+// =========================================================
+// === EXPORT POCHETTES / ÉMARGEMENT RELEVÉS DE NOTES ===
+// =========================================================
+window.exportFolderCoversNotes = function() {
     if (!DB.students || DB.students.length === 0) return alert("Veuillez d'abord charger la liste des élèves.");
 
     const { jsPDF } = window.jspdf;
@@ -7897,7 +8079,7 @@ window.exportPochettesConvocationsPDF = function() {
         doc.text(schoolName, covX + 65, 25); 
 
         doc.setFontSize(28); doc.setTextColor(44, 62, 80);
-        doc.text("CONVOCATIONS ÉLÈVES", covCenterX, 95, {align:'center'});
+        doc.text("RELEVÉS DE NOTES", covCenterX, 95, {align:'center'});
         doc.setFontSize(20);
         doc.text(`DNB BLANC - SESSION ${year}`, covCenterX, 110, {align:'center'});
 
@@ -7906,53 +8088,16 @@ window.exportPochettesConvocationsPDF = function() {
         doc.setFontSize(75);
         doc.text(className, covCenterX, 178, {align:'center'});
 
-        // --- VERSO (GAUCHE) : DOUBLE COLONNE ---
-        const listX = M;
-        const listW = HALF_W - (2*M);
-        const colW = (listW / 2) - 5; // Largeur d'une colonne avec petit espace entre les deux
-
-        const classStudents = DB.students
-            .filter(s => s.classe === className)
-            .sort((a, b) => a.nom.localeCompare(b.nom));
-
-        // On sépare la liste en deux
-        const mid = Math.ceil(classStudents.length / 2);
-        const col1 = classStudents.slice(0, mid).map(s => [s.nom, s.prenom, ""]);
-        const col2 = classStudents.slice(mid).map(s => [s.nom, s.prenom, ""]);
-
-        const tableConfig = {
-            theme: 'grid',
-            headStyles: { fillColor: [44, 62, 80], fontSize: 9, cellPadding: 2 },
-            styles: { fontSize: 10, cellPadding: 3, valign: 'middle' }, // Taille remise à 10 pour la lisibilité
-            columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 25 }, 2: { cellWidth: 'auto' } },
-            startY: 15
-        };
-
-        // Colonne 1
-        doc.autoTable({
-            ...tableConfig,
-            head: [['Nom', 'Prén.', 'Signat.']],
-            body: col1,
-            margin: { left: listX },
-            tableWidth: colW
-        });
-
-        // Colonne 2
-        doc.autoTable({
-            ...tableConfig,
-            head: [['Nom', 'Prén.', 'Signat.']],
-            body: col2,
-            margin: { left: listX + colW + 10 },
-            tableWidth: colW
-        });
+        
 
         // Ligne de pliure centrale
         doc.setDrawColor(220); doc.setLineDash([5, 5], 0);
         doc.line(HALF_W, 0, HALF_W, PG_H); doc.setLineDash([]);
     });
 
-    doc.save(`Pochettes_Convocations_${year}.pdf`);
-};
+    doc.save(`Pochettes_Releves_de_notes_${year}.pdf`);
+};    const { jsPDF } = window.jspdf;
+
 
 </script>
 
