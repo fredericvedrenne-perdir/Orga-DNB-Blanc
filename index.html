@@ -511,7 +511,7 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
     <button class="submenu-item" onclick="nav('planning-rooms', this)">🏫 Vue par Salles</button>
     <button class="submenu-item" onclick="nav('planning-profs', this)">🎓 Vue Professeurs</button>
 </div>
-        
+        <button class="menu-item" onclick="nav('view-edt', this)">➡️ Vers EDT</button>
         <button class="menu-item" id="btnConvoc" onclick="toggleSubmenu('convocMenu', this)">📨 Convocations</button>
         <div id="convocMenu" class="submenu">
             <button class="submenu-item" onclick="nav('convoc-eleves', this)">🎓 Élèves</button>
@@ -654,7 +654,60 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
             <tbody></tbody>
         </table>
     </div>
+</div div id="view-edt" class="view-section" style="display: none;">
+    
+    <div style="padding: 20px; border-bottom: 1px solid #eee; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #2c3e50;">➡️ Exports vers Logiciel EDT</h2>
+        <p style="margin: 5px 0 0; color: #7f8c8d;">
+            Générez les fichiers d'import pour Index Éducation.
+        </p>
+    </div>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; padding: 0 20px;">
+        
+        <div style="flex: 1; min-width: 300px; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div style="font-size: 40px; margin-bottom: 15px;">👥</div>
+            <h3 style="margin-top: 0; color: #2c3e50;">Groupes par Salles</h3>
+            <p style="color: #666; font-size: 0.9em; min-height: 40px;">
+                Export de la répartition des élèves (qui compose quel groupe dans quelle salle). Les noms de groupe sont par défaut DNBBL-GPEXX.</p>
+            <button onclick="exportGroupsByRoom()" class="btn-primary" style="width: 100%; padding: 12px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: background 0.2s;">
+                Récupérer les données
+            </button>
+        </div>
+
+        <div style="flex: 1; min-width: 300px; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div style="font-size: 40px; margin-bottom: 15px;">🎓</div>
+            <h3 style="margin-top: 0; color: #2c3e50;">Matières</h3>
+            <p style="color: #666; font-size: 0.9em; min-height: 40px;">
+                Export des matières pour un import dans EDT.
+            </p>
+            <button onclick="exportExamsList()" class="btn-primary" style="width: 100%; padding: 12px; background-color: #27ae60; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: background 0.2s;">
+                Récupérer les données
+            </button>
+        </div>
+
+    </div>
+	<div style="margin-top: 30px; padding: 20px; background-color: #f4f7f6; border-radius: 8px; border-left: 5px solid #3498db;">
+    <h3 style="margin-top: 0; color: #2c3e50;"><i class="fas fa-info-circle"></i> Comment faire ? (Tutoriel)</h3>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 15px;">
+        <div style="font-size: 0.95em; line-height: 1.6; color: #34495e;">
+            <p><strong>1. Récupération :</strong> Cliquez sur l'un des boutons ci-dessus pour copier les données dans votre presse-papier.</p>
+            
+            <p><strong>2. Dans EDT (Élèves) :</strong> Allez dans l'onglet <strong>Emploi du temps</strong> > menu <strong>Élèves</strong> > affichage <strong>Liste</strong> (le 1er en haut à gauche).</p>
+            
+            <p><strong>3. Importation :</strong> Faites <strong>Ctrl + V</strong>. Une fenêtre d'importation s'ouvre. Vous verrez apparaître les noms des élèves et leurs groupes.</p>
+            
+            <p><strong>4. Mapping :</strong> Au-dessus des colonnes, choisissez l'item correspondant dans le menu déroulant. 
+            <br><span style="color: #e67e22; font-weight: bold;">Astuce :</span> Les noms des colonnes générés sont identiques aux choix proposés par EDT !</p>
+            
+            <p><strong>5. Matières :</strong> Pour les matières, la procédure est la même, mais placez-vous dans l'onglet <strong>Matières</strong> d'EDT.</p>
+        </div>
+        
+    </div>
 </div>
+</div>
+
 <div id="data-profs" class="section">
     <div class="card">
         <div class="card-header-flex">
@@ -896,6 +949,9 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
     <div id="planningContainer"></div>
 
 </div> 
+
+<
+
 <div id="planning-profs" class="section">
     <div class="card">
         <div class="card-header-flex">
@@ -8098,6 +8154,87 @@ window.exportFolderCoversNotes = function() {
     doc.save(`Pochettes_Releves_de_notes_${year}.pdf`);
 };    const { jsPDF } = window.jspdf;
 
+// ==========================================
+// === MODULE EDT (EXPORT) ===
+// ==========================================
+
+// =========================================================
+// === EXPORT GROUPES ÉLÈVES (COPIE PRESSE-PAPIER) ===
+// =========================================================
+// =========================================================
+// === EXPORT GROUPES ÉLÈVES (COPIE AVEC EN-TÊTES) ===
+// =========================================================
+window.exportGroupsByRoom = function() {
+    // 1. Vérifications
+    if (!DB.rooms || DB.rooms.length === 0) {
+        alert("⚠️ Aucune salle configurée.");
+        return;
+    }
+    if (!DB.distribution || Object.keys(DB.distribution).length === 0) {
+        alert("⚠️ La répartition n'a pas été faite.");
+        return;
+    }
+
+    // 2. Construction de la chaîne AVEC EN-TÊTE
+    // On ajoute la ligne de titres séparés par des tabulations (\t)
+    let clipboardContent = "Nom\tPrénom\tAnnée en cours - Groupe\n"; 
+    let count = 0;
+
+    DB.rooms.forEach((room, index) => {
+        // Format du groupe : DNBBL-GPE01, DNBBL-GPE02...
+        const groupNumber = String(index + 1).padStart(2, '0'); 
+        const groupName = `DNBBL-GPE${groupNumber}`;
+        
+        const studentsInRoom = DB.distribution[room.nom] || [];
+
+        studentsInRoom.forEach(student => {
+            const nom = student.nom.trim();
+            const prenom = student.prenom.trim();
+            
+            // Ligne de données : Nom [TAB] Prénom [TAB] Groupe
+            clipboardContent += `${nom}\t${prenom}\t${groupName}\n`;
+            count++;
+        });
+    });
+
+    // 3. Copie dans le presse-papier
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(clipboardContent)
+            .then(() => {
+                alert(`✅ COPIE RÉUSSIE !\n\n${count} élèves copiés avec les en-têtes.\n\n👉 Allez dans votre logiciel EDT.\n👉 Faites CTRL + V.`);
+            })
+            .catch(err => {
+                console.error('Erreur clipboard:', err);
+                alert("❌ Erreur technique : Impossible d'accéder au presse-papier.");
+            });
+    } else {
+        alert("❌ Votre navigateur ne supporte pas la copie automatique.");
+    }
+};
+
+window.exportExamsList = function() {
+    if (!DB.exams || DB.exams.length === 0) return alert("⚠️ Aucune épreuve définie.");
+
+    let clipboardContent = "Code\tLibellé\n";
+    const uniqueExams = new Set();
+    let count = 0;
+
+    DB.exams.forEach(exam => {
+        const libelle = exam.name.trim();
+        if (!uniqueExams.has(libelle)) {
+            uniqueExams.add(libelle);
+            const cleanName = libelle.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+            const suffixe = cleanName.substring(0, 3).replace(/\s/g, "");
+            const code = `DNBBLC-${suffixe}`;
+            clipboardContent += `${code}\t${libelle}\n`;
+            count++;
+        }
+    });
+
+    navigator.clipboard.writeText(clipboardContent).then(() => {
+        alert(`✅ COPIE RÉUSSIE !\n\n${count} matières copiées.\nSuivez maintenant le tutoriel en bas de page.`);
+    });
+};
 
 </script>
 
