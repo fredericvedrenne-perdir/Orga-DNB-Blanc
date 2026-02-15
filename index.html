@@ -944,7 +944,10 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
         </button>
 
         <button class="btn btn-dark" style="padding:12px 20px; font-size:0.95rem;" onclick="exportPlanning()">
-            🖨️ PDF
+            🖨️ PDF Global des surveillances
+        </button>
+		<button class="btn btn-dark" style="padding:12px 20px; font-size:0.95rem;" onclick="exportRoomPlanningPDF()">
+            🖨️ PDF Par salle des surveillances
         </button>
     </div>
 
@@ -6912,6 +6915,153 @@ window.exportPlanning = function() {
     doc.save("Planning_Surveillances.pdf");
 };
 
+window.exportRoomPlanningPDF = function() {
+    // 1. Vérification de sécurité
+    if (!DB.rooms || DB.rooms.length === 0) return alert("⚠️ Aucune salle définie.");
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let pageCount = 0;
+
+    // Fonction date
+    const fmtDate = (d) => {
+        if (!d) return "";
+        const dateObj = new Date(d);
+        const s = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+        return s.charAt(0).toUpperCase() + s.slice(1);
+    };
+
+    // Fonction nettoyage Label (LaTeX)
+    const cleanLabel = (text) => {
+        if (!text) return "";
+        let cleaned = text.replace(/\$.*?\$/g, '').trim(); 
+        cleaned = cleaned.replace(/^[-_=>]+\s*/, ''); 
+        return cleaned;
+    };
+
+    // 2. Tri
+    const sortedRooms = [...DB.rooms].sort((a, b) => a.nom.localeCompare(b.nom));
+
+    sortedRooms.forEach((room) => {
+        if (pageCount > 0) doc.addPage();
+        
+        // --- EN-TÊTE ---
+        if (DB.config.logo && typeof addSmartLogo === 'function') {
+            addSmartLogo(doc, 10, 10, 30);
+        }
+        
+        doc.setFontSize(18);
+        doc.setTextColor(44, 62, 80);
+        doc.text(`Planning de Surveillance`, 105, 20, { align: 'center' });
+        
+        doc.setFontSize(16);
+        doc.setTextColor(52, 152, 219);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Salle : ${room.nom}`, 105, 32, { align: 'center' });
+        
+        // --- CORRECTION ICI : PLUS D'EMOJIS ---
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold"); // Mis en gras pour compenser
+        doc.setTextColor(100);
+        
+        let typeText = room.isTT ? "TEMPS MAJORE (TIERS-TEMPS)" : "DUREE STANDARD";
+        if(room.isAmen) typeText += "  |  AMENAGEMENTS SPECIFIQUES";
+        
+        doc.text(typeText, 105, 40, { align: 'center' });
+
+        // --- CORPS DU TABLEAU ---
+        const body = [];
+        const roomType = room.isTT ? 'tt' : 'std';
+
+        DB.exams.forEach((exam, examIdx) => {
+            let currentSlots = [];
+            if (typeof window.getComputedSlots === 'function') {
+                currentSlots = window.getComputedSlots(exam, roomType);
+            } else {
+                currentSlots = [{ start: exam.time, end: exam.end, originalIdx: 0 }];
+            }
+
+            currentSlots.forEach((slot, slotIdx) => {
+                let profs = [];
+                const slotKeyIdx = slot.originalIdx !== undefined ? slot.originalIdx : 0;
+
+                for(let i = 0; i < 10; i++) {
+                    const key = `${examIdx}_${room.nom}_${roomType}_${slotKeyIdx}_${i}`;
+                    if(DB.planning[key]) profs.push(DB.planning[key]);
+                }
+                
+                const profsText = profs.length > 0 ? profs.join('\n') : "Non assigné";
+                const dateDisplay = slotIdx === 0 ? fmtDate(exam.date) : "";
+                
+                // Gestion Label propre
+                let contentEpreuve = exam.name;
+                if (slot.label) {
+                    const cleanLbl = cleanLabel(slot.label);
+                    if (cleanLbl) contentEpreuve += `\n[LABEL]${cleanLbl}`; 
+                }
+
+                body.push([
+                    dateDisplay,
+                    `${slot.start} - ${slot.end}`,
+                    contentEpreuve,
+                    profsText
+                ]);
+            });
+        });
+
+        // --- GÉNÉRATION ---
+        doc.autoTable({
+            head: [['Date', 'Horaire', 'Épreuve', 'Surveillant(s)']],
+            body: body,
+            startY: 50,
+            theme: 'grid',
+            headStyles: { 
+                fillColor: [44, 62, 80], 
+                halign: 'center',
+                fontSize: 11,
+                valign: 'middle'
+            },
+            styles: { 
+                valign: 'middle',
+                fontSize: 10,
+                cellPadding: 4,
+                overflow: 'linebreak'
+            },
+            columnStyles: {
+                0: { cellWidth: 40 }, 
+                1: { cellWidth: 35, halign: 'center', fontStyle: 'bold' },
+                2: { cellWidth: 'auto' }, 
+                3: { cellWidth: 55 } 
+            },
+            didParseCell: function(data) {
+                // Rouge si vide
+                if (data.column.index === 3 && data.cell.raw === "Non assigné") {
+                    data.cell.styles.textColor = [231, 76, 60];
+                    data.cell.styles.fontStyle = 'italic';
+                }
+                // Label visuel
+                if (data.column.index === 2 && typeof data.cell.raw === 'string' && data.cell.raw.includes('[LABEL]')) {
+                    const parts = data.cell.raw.split('[LABEL]');
+                    data.cell.text = [parts[0], "👉 " + parts[1]]; // Flèche simple ASCII
+                }
+            }
+        });
+
+        // --- PIED DE PAGE ---
+        const pageHeight = doc.internal.pageSize.height;
+        doc.setFontSize(9);
+        doc.setTextColor(150);
+        doc.setFont("helvetica", "normal");
+        const footerYear = DB.config.year || new Date().getFullYear();
+        doc.text(`DNB Blanc ${footerYear} - Planning Salle`, 14, pageHeight - 10);
+        doc.text(`Page ${pageCount + 1} / ${sortedRooms.length}`, 196, pageHeight - 10, { align: 'right' });
+
+        pageCount++;
+    });
+
+    doc.save("Planning_Par_Salles.pdf");
+};
+
 function switchPochetteTab(zoneId, element) {
     // 1. Gestion des onglets visuels
     document.querySelectorAll('.pochette-zone').forEach(el => el.classList.remove('active'));
@@ -7534,47 +7684,44 @@ window.renderAmenagements = function() {
     const checkedMefs = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
     const ignoreMefFilter = (checkboxes.length === 0);
     
-    tbody.innerHTML = "";
-    
-    // 3. Filtrage
-    const filtered = DB.students.filter(s => {
+    // 3. Construction du HTML
+    const labelsDef = (DB.config && DB.config.labels) ? DB.config.labels : [];
+
+    // Filtrage et Tri
+    const rowsHTML = DB.students.filter(s => {
         if(searchVal && !s.nom.toLowerCase().includes(searchVal) && !s.prenom.toLowerCase().includes(searchVal)) return false;
-        
         if(!ignoreMefFilter) {
-            if(s.mef && !checkedMefs.includes(s.mef)) return false; 
+            if(s.mef && !checkedMefs.includes(s.mef)) return false;
             if(!s.mef && checkedMefs.length === 0) return false;
         }
         return true;
-    });
-
-    // 4. Affichage (AVEC LE FIX DU CLIC)
-    filtered.sort((a,b) => a.nom.localeCompare(b.nom)).forEach(s => {
-        let badges = "";
-        const labelsDef = (DB.config && DB.config.labels) ? DB.config.labels : [];
+    }).sort((a,b) => a.nom.localeCompare(b.nom)).map(s => {
         
-        labelsDef.forEach(l => {
+        let badges = labelsDef.map(l => {
             const isActive = (s.labels || []).includes(l.code);
             
-            // Style Visuel (Actif / Inactif)
+            // Style Initial (Actif ou Inactif)
+            // Note : Pour l'inactif, on met fond blanc et texte #333 (gris foncé/noir) pour que ce ne soit pas "grisé"
             const style = isActive 
-                ? `background:${l.color}; color:white; border:1px solid ${l.color}; opacity:1; font-weight:bold;` 
-                : `background:white; color:#ccc; border:1px solid #ddd; opacity:0.5;`;
+                ? `background:${l.color}; color:white; border:1px solid ${l.color}; font-weight:bold;` 
+                : `background:white; color:#333; border:1px solid #ccc; font-weight:normal;`; // <--- ICI
             
-            // --- LE CORRECTIF EST ICI ---
-            // On a ajouté ", this" dans les parenthèses de toggleStudentLabel
-            badges += `<span onclick="toggleStudentLabel(${s.id}, '${l.code}', this)" 
-                       style="cursor:pointer; padding:4px 8px; border-radius:12px; font-size:0.75rem; margin-right:5px; transition:all 0.1s; display:inline-block; margin-bottom:3px; user-select:none; ${style}">
-                       ${l.code}</span>`;
-        });
+            // On ajoute bien ", this" dans le onclick
+            return `<span onclick="toggleStudentLabel(${s.id}, '${l.code}', this)" 
+                          style="cursor:pointer; padding:4px 8px; border-radius:12px; font-size:0.75rem; margin-right:5px; transition:all 0.1s; display:inline-block; margin-bottom:3px; user-select:none; ${style}">
+                          ${l.code}</span>`;
+        }).join('');
 
-        tbody.innerHTML += `
+        return `
         <tr>
             <td style="font-weight:600;">${s.nom} <span style="font-weight:normal; font-size:0.9em">${s.prenom}</span></td>
             <td style="text-align:center; font-size:0.85rem;">${s.classe}</td>
             <td style="text-align:center; font-size:0.8rem; color:#2980b9;">${s.mef || '-'}</td>
             <td>${badges}</td>
         </tr>`;
-    });
+    }).join('');
+
+    tbody.innerHTML = rowsHTML;
 };
 
 // On force le rafraîchissement immédiat pour appliquer le fix
@@ -7588,56 +7735,54 @@ if(document.getElementById('data-amenagements') && document.getElementById('data
 // ============================================================
 
 window.toggleStudentLabel = function(studentId, code, btnElement) {
-    // 1. Récupération des données
     const s = DB.students.find(st => st.id === studentId);
     if(!s) return;
-    if(!s.labels) s.labels = []; // Sécurité
 
+    if(!s.labels) s.labels = [];
+
+    // 1. Mise à jour des DONNÉES
     const labelConfig = DB.config.labels.find(l => l.code === code);
-    if(!labelConfig) return;
+    const color = labelConfig ? labelConfig.color : '#333';
+    let isNowActive = false;
 
-    let isActive = false;
-
-    // 2. Bascule de l'état (ON/OFF)
     if(s.labels.includes(code)) {
-        // On désactive
+        // RETRAIT
         s.labels = s.labels.filter(l => l !== code);
         if(code === 'TTEMPS') s.tt = false;
-        isActive = false;
+        isNowActive = false;
     } else {
-        // On active
+        // AJOUT
         s.labels.push(code);
         if(code === 'TTEMPS') s.tt = true;
-        isActive = true;
+        isNowActive = true;
     }
 
-    // 3. MISE À JOUR VISUELLE IMMÉDIATE (Le Correctif est ici)
-    // On force le style CSS directement sur le bouton cliqué pour qu'il
-    // ressemble exactement à ce qu'il sera après rechargement.
+    // 2. Mise à jour VISUELLE INSTANTANÉE (Correction du style)
     if(btnElement) {
-        if(isActive) {
-            // Style ACTIF (Fond couleur, Texte blanc)
-            btnElement.style.background = labelConfig.color;
+        // On enlève toute gestion d'opacité qui donnait l'effet "fantôme"
+        btnElement.style.opacity = "1"; 
+
+        if (isNowActive) {
+            // Style ACTIF : Couleur du label, texte blanc, gras
+            btnElement.style.background = color;
             btnElement.style.color = "white";
-            btnElement.style.border = `1px solid ${labelConfig.color}`;
-            btnElement.style.opacity = "1";
+            btnElement.style.border = "1px solid " + color;
             btnElement.style.fontWeight = "bold";
         } else {
-            // Style INACTIF (Fond blanc, Texte gris)
+            // Style INACTIF : Fond blanc, texte sombre (plus lisible), bordure grise
             btnElement.style.background = "white";
-            btnElement.style.color = "#ccc";
-            btnElement.style.border = "1px solid #ddd";
-            btnElement.style.opacity = "0.5";
+            btnElement.style.color = "#333"; // Gris foncé presque noir
+            btnElement.style.border = "1px solid #ccc";
             btnElement.style.fontWeight = "normal";
         }
 
-        // Petit effet de ressort pour confirmer le clic visuellement
-        btnElement.style.transform = "scale(0.90)";
+        // Petit effet de clic
+        btnElement.style.transform = "scale(0.95)";
         setTimeout(() => btnElement.style.transform = "scale(1)", 100);
     }
     
-    // 4. Sauvegarde silencieuse (pour ne pas perdre la modif)
-    if(typeof autoSave === 'function') autoSave();
+    // Sauvegarde (Optionnel)
+    // if(typeof saveData === 'function') saveData();
 };
 
 // 3. On lance la vérification au démarrage
