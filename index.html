@@ -543,8 +543,13 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
     <div class="col" style="flex:0.5"><label>Session</label><input type="text" id="sessionYear" value="2026" onchange="DB.config.year=this.value"></div>
 </div>
                 <div class="row">
-                    <div class="col"><label>Logo</label><input type="file" id="logoInput" accept="image/*" onchange="importLogo()"></div>
-                    <div class="col">
+<div class="col">
+    <label>Logo</label>
+    <div style="display:flex; gap:5px; align-items:center;">
+        <input type="file" id="logoInput" accept="image/*" onchange="importLogo()">
+        <button class="btn btn-danger" onclick="deleteLogo()" style="padding:4px 8px;" title="Supprimer le logo">🗑️</button>
+    </div>
+</div>                    <div class="col">
                         <label>Matières Sciences (Cocher)</label>
                         <div style="display:flex; gap:15px; margin-top:10px; background:#f8f9fa; padding:10px; border-radius:5px; border:1px solid #ddd;">
                             <label><input type="checkbox" id="chkSVT" onchange="updateScienceConfig()" checked="checked"> SVT</label>
@@ -594,10 +599,15 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
                                style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:5px; background:#f9f9f9;">
                         
                         <div style="margin-top:20px; background:#f0f8ff; padding:10px; border-radius:5px; border:1px dashed #3498db;">
-                             <label style="font-weight:bold; color:#2980b9;">✍️ Signature (Image)</label>
-                            <input type="file" id="sigInput" accept="image/*" onchange="importSignature()" style="font-size:0.8rem;">
-                            <img id="imgSigPreview" style="max-height:40px; display:none; margin-top:5px; border:1px solid #ccc; background:white;">
-                        </div>
+     <label style="font-weight:bold; color:#2980b9;">✍️ Signature (Image)</label>
+     
+     <div style="display:flex; gap:5px; align-items:center;">
+        <input type="file" id="sigInput" accept="image/*" onchange="importSignature()" style="font-size:0.8rem;">
+        <button class="btn btn-danger" onclick="deleteSignature()" style="padding:4px 8px;" title="Supprimer la signature">🗑️</button>
+     </div>
+
+    <img id="imgSigPreview" style="max-height:40px; display:none; margin-top:5px; border:1px solid #ccc; background:white;">
+</div>
                     </div>
                 </div>
             </div>
@@ -8381,6 +8391,25 @@ window.exportExamsList = function() {
         alert(`✅ COPIE RÉUSSIE !\n\n${count} matières copiées.\nSuivez maintenant le tutoriel en bas de page.`);
     });
 };
+
+
+window.deleteLogo = function() {
+    if(confirm("Voulez-vous vraiment supprimer le logo ?")) {
+        DB.config.logo = ""; 
+        document.getElementById('logoInput').value = ""; 
+        checkLogo(); 
+    }
+};
+
+window.deleteSignature = function() {
+    if(confirm("Voulez-vous vraiment supprimer la signature ?")) {
+        DB.config.signature = ""; 
+        document.getElementById('sigInput').value = ""; 
+        checkSignature(); 
+    }
+};
+// ----------------------
+</script>
 
 </script>
 
