@@ -3820,40 +3820,89 @@ function generateTableLabelsPDF(nbCols, nbRows) {
                 });
             });
         });
-    } else {
-        DB.students.forEach(s => items.push({ room: "NON PLACÉ", name: `${s.nom} ${s.prenom}`, classe: s.classe, code: s.anonymat || "" }));
-    }
+    }  else {
+            // === MODE PERSONNALISÉ (CUSTOM) ===
+            const cfg = params.custom;
 
-    const m = 10;
-    const boxW = (210 - 2*m) / nbCols;
-    const boxH = (297 - 2*m) / nbRows;
-    const perPage = nbCols * nbRows;
+            // Fonction Helper pour dessiner la liste des champs
+            const drawFields = (fieldList, dx, dy, w, h, align = 'left') => {
+                let currentY = dy + 6; // Marge haute
+                doc.setTextColor(0);
+                
+                fieldList.forEach(f => {
+                    let txt = "";
+                    let isBold = false;
+                    let size = 9;
+                    let color = 0;
 
-    items.forEach((item, i) => {
-        const idxPage = i % perPage;
-        if (i > 0 && idxPage === 0) doc.addPage();
-        const col = idxPage % nbCols;
-        const row = Math.floor(idxPage / nbCols);
-        const x = m + col * boxW;
-        const y = m + row * boxH;
-        const cx = x + boxW/2;
-        const cy = y + boxH/2;
+                    // Configuration des champs
+                    switch (f) {
+                        case 'nom': txt = `${s.nom} ${s.prenom}`; isBold = true; size = 10; break;
+                        case 'classe': txt = `Classe: ${s.classe}`; break;
+                        case 'ddn': txt = `Né(e): ${s.ddn || s.dob || '--'}`; size = 8; break;
+                        case 'salle': txt = `Salle: ${item.room}`; isBold = true; break;
+                        case 'anonymat': txt = s.anonymat || ""; isBold = true; size = 12; break;
+                        case 'epreuve': txt = item.exam; size = 8; color = 100; break;
+                        case 'amenagement': 
+                            if (s.tiersTemps || s.amenagements) {
+                                txt = "AMÉNAGEMENT"; 
+                                color = [231, 76, 60]; // Rouge
+                                isBold = true;
+                            }
+                            break;
+                    }
 
-        doc.setDrawColor(200); doc.setLineDash([1, 1]);
-        doc.rect(x, y, boxW, boxH); doc.setLineDash([]);
+                    if (!txt) return;
 
-        doc.setFontSize(8); doc.setTextColor(100);
-        doc.text(`DNB ${DB.config.year} - Salle ${item.room}`, cx, y + 8, {align:'center'});
-        doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica", "bold");
-        doc.text(item.name, cx, cy, {align:'center'});
-        doc.setFontSize(10); doc.setFont("helvetica", "normal");
-        doc.text(item.classe, cx, cy + 8, {align:'center'});
+                    // Application du style
+                    doc.setFontSize(size);
+                    if(Array.isArray(color)) doc.setTextColor(color[0], color[1], color[2]);
+                    else doc.setTextColor(color);
+                    
+                    doc.setFont("helvetica", isBold ? "bold" : "normal");
 
-        if (item.code) {
-            doc.setFontSize(8); doc.setTextColor(150);
-            doc.text(item.code, x + boxW - 2, y + boxH - 2, {align:'right'});
+                    // Dessin du texte
+                    if (align === 'center') doc.text(txt, dx + w / 2, currentY, { align: 'center', maxWidth: w-2 });
+                    else if (align === 'right') doc.text(txt, dx + w - 2, currentY, { align: 'right', maxWidth: w-2 });
+                    else doc.text(txt, dx + 2, currentY, { maxWidth: w-2 });
+
+                    // Reset couleur et saut de ligne
+                    doc.setTextColor(0);
+                    currentY += (size / 3) + 3; 
+                });
+            };
+
+            // --- GESTION DE LA DÉCOUPE (GAUCHE / DROITE) ---
+            if (cfg.hasCutLine) {
+                // Calcul du milieu vertical
+                const cutX = x + (boxW * 0.5);
+
+                // 1. Trait pointillé VERTICAL
+                doc.setDrawColor(0);
+                doc.setLineWidth(0.2);
+                doc.setLineDash([3, 3], 0);
+                doc.line(cutX, y, cutX, y + boxH); // Ligne de haut en bas
+                doc.setLineDash([]); // On remet en continu
+
+                // 2. Petit ciseau (décoratif)
+                doc.setFontSize(10);
+                doc.setTextColor(150);
+                doc.text("✂", cutX - 1.5, y + boxH - 2); 
+
+                // 3. Remplissage des zones
+                // Zone 1 à GAUCHE
+                drawFields(cfg.zone1, x, y, (boxW * 0.5), boxH, 'left');
+                
+                // Zone 2 à DROITE (avec une petite marge interne)
+                drawFields(cfg.zone2, cutX + 1, y, (boxW * 0.5) - 1, boxH, 'left');
+
+            } else {
+                // SANS DÉCOUPE
+                // On sépare quand même virtuellement en deux colonnes pour être propre
+                drawFields(cfg.zone1, x, y, (boxW * 0.5), boxH, 'left');
+                drawFields(cfg.zone2, x + (boxW * 0.5), y, (boxW * 0.5), boxH, 'left');
+            }
         }
-    });
     doc.save(`Etiquettes_Table.pdf`);
 }
 
@@ -3861,47 +3910,37 @@ function generateTableLabelsPDF(nbCols, nbRows) {
 // === GESTIONNAIRE D'ÉTIQUETTES (UI & MOTEUR V3) ===
 // =========================================================
 
-/**
- * Lance l'interface de configuration des étiquettes
- */
-function openLabelConfig() {
-    // Vérifications pré-alables
+window.openLabelConfig = function() {
     if (!DB.students || DB.students.length === 0) return alert("Aucun élève dans la base.");
     
-    // On vérifie si les codes sont générés (nécessaire pour DNB, optionnel pour Perso mais mieux)
-    const hasCodes = DB.students.some(s => s.anonymat && s.anonymat.length > 0);
-    
-    // --- STYLES CSS INJECTÉS POUR L'INTERFACE ---
+    // CSS
     const styleId = 'label-ui-styles';
     if (!document.getElementById(styleId)) {
         const style = document.createElement('style');
         style.id = styleId;
         style.innerHTML = `
             .lbl-modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(3px); }
-            .lbl-modal { background:white; border-radius:12px; width:800px; max-height:90vh; display:flex; flex-direction:column; font-family:'Segoe UI', sans-serif; box-shadow:0 20px 50px rgba(0,0,0,0.3); overflow:hidden; }
-            .lbl-header { background:#2c3e50; color:white; padding:20px; text-align:center; }
+            .lbl-modal { background:white; border-radius:12px; width:900px; max-height:95vh; display:flex; flex-direction:column; font-family:'Segoe UI', sans-serif; box-shadow:0 20px 50px rgba(0,0,0,0.3); overflow:hidden; }
+            .lbl-header { background:#2c3e50; color:white; padding:15px; text-align:center; }
             .lbl-body { display:flex; flex:1; overflow:hidden; }
-            .lbl-sidebar { width:250px; background:#f8f9fa; border-right:1px solid #ddd; padding:20px; display:flex; flex-direction:column; gap:10px; }
+            .lbl-sidebar { width:280px; background:#f8f9fa; border-right:1px solid #ddd; padding:15px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
             .lbl-content { flex:1; padding:20px; overflow-y:auto; background:white; }
             
-            /* Tuiles de Mode */
-            .mode-tile { padding:15px; border:2px solid #ddd; border-radius:8px; cursor:pointer; text-align:center; transition:all 0.2s; background:white; }
+            .mode-tile { padding:10px; border:2px solid #ddd; border-radius:8px; cursor:pointer; text-align:center; transition:all 0.2s; background:white; margin-bottom:5px; }
             .mode-tile:hover { border-color:#bdc3c7; background:#fdfdfd; }
-            .mode-tile.active { border-color:#3498db; background:#ebf5fb; box-shadow:0 0 0 3px rgba(52,152,219,0.2); }
-            .mode-tile h4 { margin:0 0 5px 0; color:#2c3e50; }
-            .mode-tile p { margin:0; font-size:0.85rem; color:#7f8c8d; }
+            .mode-tile.active { border-color:#3498db; background:#ebf5fb; box-shadow:0 0 0 2px rgba(52,152,219,0.2); }
+            .mode-tile h4 { margin:0 0 2px 0; color:#2c3e50; font-size:0.95rem; }
+            .mode-tile p { margin:0; font-size:0.75rem; color:#7f8c8d; }
 
-            /* Options de Tri */
-            .sort-opt { display:flex; align-items:center; gap:10px; padding:10px; border:1px solid #eee; border-radius:6px; cursor:pointer; margin-bottom:8px; }
+            .sort-opt { display:flex; align-items:center; gap:10px; padding:8px; border:1px solid #eee; border-radius:6px; cursor:pointer; margin-bottom:5px; font-size:0.9rem; }
             .sort-opt:hover { background:#f9f9f9; }
             .sort-opt.selected { background:#e8f6f3; border-color:#27ae60; color:#27ae60; font-weight:bold; }
-            
-            /* Zone Config Perso */
+
             .zone-config { border:1px dashed #bbb; padding:15px; border-radius:8px; margin-bottom:15px; position:relative; }
             .zone-title { position:absolute; top:-10px; left:15px; background:white; padding:0 5px; font-weight:bold; color:#7f8c8d; font-size:0.8rem; }
             .field-grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:5px; }
             .field-check { display:flex; align-items:center; gap:5px; font-size:0.9rem; cursor:pointer; }
-
+            
             .btn-action { padding:12px 25px; border:none; border-radius:6px; font-weight:bold; cursor:pointer; font-size:1rem; transition:background 0.2s; }
             .btn-cancel { background:#95a5a6; color:white; }
             .btn-print { background:#2ecc71; color:white; }
@@ -3910,20 +3949,21 @@ function openLabelConfig() {
         document.head.appendChild(style);
     }
 
-    // --- ÉTAT INITIAL ---
+    // STATE
     let state = {
-        mode: 'DNB', // 'DNB' ou 'CUSTOM'
-        sort: 'room', // 'room', 'class', 'alpha'
+        mode: 'DNB', 
+        sort: 'room',
+        grouping: 'student', // 'student' ou 'exam' (NOUVEAU)
         custom: {
-            hasCutLine: false,
+            hasCutLine: true,
             cols: 2,
             rows: 8,
-            zone1: ['nom', 'classe', 'salle'], // Haut ou Gauche
-            zone2: ['anonymat', 'epreuve']     // Bas ou Droite
+            zone1: ['anonymat', 'epreuve', 'salle'], 
+            zone2: ['nom', 'classe', 'salle'],
         }
     };
 
-    // --- CONSTRUCTION HTML ---
+    // HTML
     const overlay = document.createElement('div');
     overlay.className = 'lbl-modal-overlay';
     
@@ -3932,41 +3972,44 @@ function openLabelConfig() {
     
     modal.innerHTML = `
         <div class="lbl-header">
-            <h2 style="margin:0">🖨️ Centre d'impression des Étiquettes</h2>
-            <small>Génération par épreuve (1 étiquette / matière)</small>
+            <h2 style="margin:0">🖨️ Impression Étiquettes</h2>
         </div>
         <div class="lbl-body">
             <div class="lbl-sidebar">
-                <label style="font-weight:bold; color:#34495e;">1. Format</label>
-                
+                <label style="font-weight:bold; color:#34495e; font-size:0.9rem;">1. Format</label>
                 <div class="mode-tile active" id="tile-dnb" onclick="uiSetMode('DNB')">
-                    <div style="font-size:1.5rem">🇫🇷</div>
+                    <div style="font-size:1.2rem">🇫🇷</div>
                     <h4>Officiel DNB</h4>
-                    <p>Format Massicot (2x8)<br>Nom en haut, Code en bas<br>Trait de coupe inclus</p>
+                    <p>Gauche: Anonymat / Droite: Identité</p>
                 </div>
-
                 <div class="mode-tile" id="tile-custom" onclick="uiSetMode('CUSTOM')">
-                    <div style="font-size:1.5rem">🎨</div>
+                    <div style="font-size:1.2rem">🎨</div>
                     <h4>Personnalisé</h4>
-                    <p>Choix des champs<br>Mise en page libre<br>Avec ou sans coupe</p>
+                    <p>Mise en page libre</p>
                 </div>
+                
+                <hr style="width:100%; border:0; border-top:1px solid #ddd; margin:10px 0;">
+
+                <label style="font-weight:bold; color:#34495e; font-size:0.9rem;">2. Ordre de tri</label>
+                <div class="sort-opt selected" id="sort-room" onclick="uiSetSort('room')"><span>🏫</span> Par Salle</div>
+                <div class="sort-opt" id="sort-class" onclick="uiSetSort('class')"><span>🎓</span> Par Classe</div>
+                <div class="sort-opt" id="sort-alpha" onclick="uiSetSort('alpha')"><span>🔤</span> Alphabétique</div>
 
                 <hr style="width:100%; border:0; border-top:1px solid #ddd; margin:10px 0;">
 
-                <label style="font-weight:bold; color:#34495e;">2. Ordre de tri</label>
-                <div class="sort-opt selected" id="sort-room" onclick="uiSetSort('room')">
-                    <span>🏫</span> Par Salle (Répartition)
+                <label style="font-weight:bold; color:#34495e; font-size:0.9rem;">3. Regroupement</label>
+                <div class="mode-tile active" id="grp-student" onclick="uiSetGroup('student')">
+                    <h4>👤 Par Élève</h4>
+                    <p>Toutes les matières de l'élève à la suite.</p>
                 </div>
-                <div class="sort-opt" id="sort-class" onclick="uiSetSort('class')">
-                    <span>🎓</span> Par Classe
+                <div class="mode-tile" id="grp-exam" onclick="uiSetGroup('exam')">
+                    <h4>📚 Par Épreuve</h4>
+                    <p>Toute la salle en Maths, puis en Histoire...</p>
                 </div>
-                <div class="sort-opt" id="sort-alpha" onclick="uiSetSort('alpha')">
-                    <span>🔤</span> Alphabétique (Global)
-                </div>
+
             </div>
 
-            <div class="lbl-content" id="config-panel">
-                </div>
+            <div class="lbl-content" id="config-panel"></div>
         </div>
         <div style="padding:15px; background:#f1f2f6; text-align:right; border-top:1px solid #ddd; display:flex; justify-content:flex-end; gap:10px;">
             <button class="btn-action btn-cancel" id="btn-close">Annuler</button>
@@ -3977,8 +4020,7 @@ function openLabelConfig() {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // --- FONCTIONS INTERNES UI ---
-    
+    // HELPER FUNCTIONS
     window.uiSetMode = (m) => {
         state.mode = m;
         document.getElementById('tile-dnb').classList.toggle('active', m === 'DNB');
@@ -3988,9 +4030,14 @@ function openLabelConfig() {
 
     window.uiSetSort = (s) => {
         state.sort = s;
-        ['room','class','alpha'].forEach(k => {
-            document.getElementById('sort-'+k).classList.toggle('selected', s === k);
-        });
+        ['room','class','alpha'].forEach(k => document.getElementById('sort-'+k).classList.toggle('selected', s === k));
+    };
+
+    // NOUVELLE FONCTION POUR LE REGROUPEMENT
+    window.uiSetGroup = (g) => {
+        state.grouping = g;
+        document.getElementById('grp-student').classList.toggle('active', g === 'student');
+        document.getElementById('grp-exam').classList.toggle('active', g === 'exam');
     };
 
     window.uiToggleField = (zone, field) => {
@@ -4002,23 +4049,15 @@ function openLabelConfig() {
 
     window.uiRenderFields = (zone) => {
         const fields = [
-            {id:'nom', label:'Nom Prénom'},
-            {id:'classe', label:'Classe'},
-            {id:'ddn', label:'Date Naissance'},
-            {id:'salle', label:'Salle'},
-            {id:'anonymat', label:'N° Anonymat'},
-            {id:'epreuve', label:'Épreuve'},
+            {id:'nom', label:'Nom Prénom'}, {id:'classe', label:'Classe'},
+            {id:'ddn', label:'Date Naissance'}, {id:'salle', label:'Salle'},
+            {id:'anonymat', label:'N° Anonymat'}, {id:'epreuve', label:'Épreuve'},
             {id:'amenagement', label:'Label Aménagement'}
         ];
-        
         let html = `<div class="field-grid">`;
         fields.forEach(f => {
             const isChecked = state.custom[zone].includes(f.id) ? 'checked' : '';
-            html += `
-                <label class="field-check">
-                    <input type="checkbox" ${isChecked} onchange="uiToggleField('${zone}', '${f.id}')">
-                    ${f.label}
-                </label>`;
+            html += `<label class="field-check"><input type="checkbox" ${isChecked} onchange="uiToggleField('${zone}', '${f.id}')"> ${f.label}</label>`;
         });
         html += `</div>`;
         return html;
@@ -4029,307 +4068,292 @@ function openLabelConfig() {
         if (state.mode === 'DNB') {
             p.innerHTML = `
                 <div style="text-align:center; color:#7f8c8d; margin-top:50px;">
-                    <div style="font-size:3rem; margin-bottom:20px;">👌</div>
-                    <h3>Configuration Automatique</h3>
-                    <p>Le format DNB Officiel est standardisé.</p>
-                    <ul style="text-align:left; display:inline-block; margin-top:20px; color:#555;">
-                        <li>Format A4 : 2 colonnes x 8 lignes</li>
-                        <li>Trait de découpe (Massicot) inclus</li>
-                        <li><strong>Haut :</strong> Nom, Prénom, Classe (Zone administrative)</li>
-                        <li><strong>Bas :</strong> Anonymat, Épreuve (Zone copie)</li>
-                    </ul>
-                </div>
-            `;
+                    <h3>Configuration DNB</h3>
+                    <p>Standardisé : Anonymat + Salle (Gauche) / Identité (Droite)</p>
+                    <div style="margin-top:20px; font-size:0.9rem; background:#eee; padding:10px; border-radius:5px; display:inline-block;">
+                        Trait de coupe vertical inclus
+                    </div>
+                </div>`;
         } else {
             p.innerHTML = `
-                <h3 style="margin-top:0; color:#2c3e50;">⚙️ Personnalisation</h3>
-                
+                <h3 style="margin-top:0;">⚙️ Personnalisation</h3>
                 <div style="display:flex; gap:20px; margin-bottom:20px;">
-                    <div>
-                        <label>Colonnes</label><br>
-                        <input type="number" value="${state.custom.cols}" min="1" max="5" style="width:60px; padding:5px;" onchange="state.custom.cols=this.value">
-                    </div>
-                    <div>
-                        <label>Lignes</label><br>
-                        <input type="number" value="${state.custom.rows}" min="1" max="20" style="width:60px; padding:5px;" onchange="state.custom.rows=this.value">
-                    </div>
+                    <div><label>Colonnes</label><br><input type="number" value="${state.custom.cols}" min="1" max="5" style="width:60px;" onchange="state.custom.cols=this.value"></div>
+                    <div><label>Lignes</label><br><input type="number" value="${state.custom.rows}" min="1" max="20" style="width:60px;" onchange="state.custom.rows=this.value"></div>
                     <div style="flex:1; display:flex; align-items:end;">
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:8px; font-weight:bold; color:#e74c3c;">
-                            <input type="checkbox" id="chk-cut" ${state.custom.hasCutLine ? 'checked' : ''} onchange="state.custom.hasCutLine=this.checked; renderConfigPanel();">
-                            ✂️ Afficher trait de découpe
+                        <label style="cursor:pointer; font-weight:bold; color:#e74c3c;">
+                            <input type="checkbox" id="chk-cut" ${state.custom.hasCutLine ? 'checked' : ''}>
+                            ✂️ Trait de coupe vertical
                         </label>
                     </div>
                 </div>
-
-                <div class="zone-config" style="background:#fff3e0; border-color:#ffcc80;">
-                    <span class="zone-title">ZONE 1 (${state.custom.hasCutLine ? 'Haut/Gauche - À jeter' : 'Principale'})</span>
-                    ${uiRenderFields('zone1')}
+                <div class="zone-config" style="background:#fff3e0;">
+                    <span class="zone-title">ZONE 1 (Gauche)</span>${uiRenderFields('zone1')}
                 </div>
-
-                <div class="zone-config" style="background:#e8f8f5; border-color:#a3e4d7; display:${state.custom.hasCutLine ? 'block' : 'block'};">
-                    <span class="zone-title">ZONE 2 (${state.custom.hasCutLine ? 'Bas/Droite - À conserver' : 'Secondaire (Optionnel)'})</span>
-                    ${uiRenderFields('zone2')}
+                <div class="zone-config" style="background:#e8f8f5;">
+                    <span class="zone-title">ZONE 2 (Droite)</span>${uiRenderFields('zone2')}
                 </div>
             `;
         }
     }
 
-    // --- ACTIONS ---
+    // ACTIONS
     document.getElementById('btn-close').onclick = () => {
         document.body.removeChild(overlay);
-        // Clean global scope
-        delete window.uiSetMode; delete window.uiSetSort; delete window.uiToggleField;
+        delete window.uiSetMode; delete window.uiSetSort; delete window.uiToggleField; delete window.uiSetGroup;
     };
 
     document.getElementById('btn-generate').onclick = () => {
-        const finalState = JSON.parse(JSON.stringify(state)); // Deep copy
+        // Sécurité Checkbox
+        const chk = document.getElementById('chk-cut');
+        if (chk) state.custom.hasCutLine = chk.checked;
+
+        const finalState = JSON.parse(JSON.stringify(state)); 
         document.body.removeChild(overlay);
         setTimeout(() => generateLabelsEngine(finalState), 100);
     };
 
-    // Initial render
     renderConfigPanel();
-}
-
+};
 
 // =========================================================
 // === MOTEUR DE GÉNÉRATION PDF (V3) ===
 // =========================================================
 
-function generateLabelsEngine(params) {
-    if (!window.jspdf) return alert("Erreur librairie PDF.");
+window.generateLabelsEngine = function(params) {
+    // 1. Initialisation
+    if (!window.jspdf) return alert("Erreur : La librairie jsPDF n'est pas chargée.");
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    
+    // Création du PDF (A4 Portrait, mm)
+    const doc = new jsPDF('p', 'mm', 'a4');
+    doc.setProperties({ title: "Etiquettes_DNB.pdf" });
+
+    // 2. Préparation des données
     const items = [];
+    const createLabelData = (s, r, e) => ({ student: s, room: r, exam: e, type: 'label' });
 
-    // --- 1. PRÉPARATION DE LA LISTE DES ÉTIQUETTES ---
-    // On génère 1 objet par étiquette à imprimer
-    
-    function createLabelData(s, roomName, examName) {
-        return {
-            student: s,
-            room: roomName,
-            exam: examName,
-            type: 'label'
-        };
-    }
+    // Option de regroupement (défaut : student)
+    const grouping = params.grouping || 'student';
 
-    // Fonction de tri et boucle principale
-    let sortedStudents = [];
-    
-    if (params.sort === 'room') {
-        if (!DB.distribution || Object.keys(DB.distribution).length === 0) {
-            alert("⚠️ Aucune répartition en salle trouvée. Passage en tri alphabétique.");
-            params.sort = 'alpha';
-        } else {
-            // Tri par Salle
+    // --- LOGIQUE DE PRÉPARATION ---
+
+    // A. REGROUPEMENT PAR ÉLÈVE (Classique : Enveloppes individuelles)
+    if (grouping === 'student') {
+        let sortedStudents = [];
+        
+        // Tri par Salle
+        if (params.sort === 'room' && DB.distribution) {
             const rooms = Object.keys(DB.distribution).sort();
             rooms.forEach(r => {
                 const inRoom = DB.distribution[r].sort((a,b) => a.nom.localeCompare(b.nom));
-                // Pour chaque élève, on crée une entrée par épreuve
                 inRoom.forEach(s => {
                     DB.exams.forEach(ex => items.push(createLabelData(s, r, ex.name)));
                 });
-                items.push({ type: 'BREAK' }); // Saut de page après chaque salle
+                items.push({ type: 'BREAK' }); // Saut de page fin de salle
+            });
+        } 
+        // Tri Classe ou Alpha
+        else {
+            if (params.sort === 'class') {
+                sortedStudents = [...DB.students].sort((a,b) => a.classe.localeCompare(b.classe) || a.nom.localeCompare(b.nom));
+            } else {
+                sortedStudents = [...DB.students].sort((a,b) => a.nom.localeCompare(b.nom));
+            }
+
+            sortedStudents.forEach(s => {
+                // Trouver la salle
+                let room = "---";
+                if (DB.distribution) {
+                    for (const [rName, list] of Object.entries(DB.distribution)) {
+                        if (list.some(st => st.id === s.id)) { room = rName; break; }
+                    }
+                }
+                DB.exams.forEach(ex => items.push(createLabelData(s, room, ex.name)));
             });
         }
     }
-    
-    if (params.sort === 'class') {
-        sortedStudents = [...DB.students].sort((a,b) => {
-            if (a.classe !== b.classe) return a.classe.localeCompare(b.classe);
-            return a.nom.localeCompare(b.nom);
+
+    // B. REGROUPEMENT PAR ÉPREUVE (Logistique : Distribution par matière)
+    else if (grouping === 'exam') {
+        DB.exams.forEach(exam => {
+            
+            // Tri par Salle pour CETTE épreuve
+            if (params.sort === 'room' && DB.distribution) {
+                const rooms = Object.keys(DB.distribution).sort();
+                rooms.forEach(r => {
+                    const inRoom = DB.distribution[r].sort((a,b) => a.nom.localeCompare(b.nom));
+                    inRoom.forEach(s => {
+                        items.push(createLabelData(s, r, exam.name));
+                    });
+                    items.push({ type: 'BREAK' }); // Saut de page entre chaque salle pour une même épreuve
+                });
+            } 
+            // Tri Classe ou Alpha pour CETTE épreuve
+            else {
+                let sortedStudents = [];
+                if (params.sort === 'class') {
+                    sortedStudents = [...DB.students].sort((a,b) => a.classe.localeCompare(b.classe) || a.nom.localeCompare(b.nom));
+                } else {
+                    sortedStudents = [...DB.students].sort((a,b) => a.nom.localeCompare(b.nom));
+                }
+
+                sortedStudents.forEach(s => {
+                    let room = "---";
+                    if (DB.distribution) {
+                        for (const [rName, list] of Object.entries(DB.distribution)) {
+                            if (list.some(st => st.id === s.id)) { room = rName; break; }
+                        }
+                    }
+                    items.push(createLabelData(s, room, exam.name));
+                });
+            }
+
+            // Saut de page OBLIGATOIRE à la fin de chaque épreuve
+            items.push({ type: 'BREAK' });
         });
-    } else if (params.sort === 'alpha') {
-        sortedStudents = [...DB.students].sort((a,b) => a.nom.localeCompare(b.nom));
     }
 
-    // Si on n'est pas en mode salle (donc Class ou Alpha), on remplit items ici
-    if (params.sort !== 'room') {
-        sortedStudents.forEach(s => {
-            // Trouver la salle de l'élève si elle existe
-            let room = "---";
-            if (DB.distribution) {
-                for (const [rName, list] of Object.entries(DB.distribution)) {
-                    if (list.some(st => st.id === s.id)) { room = rName; break; }
-                }
-            }
-            DB.exams.forEach(ex => items.push(createLabelData(s, room, ex.name)));
-            // Optionnel : Saut de page entre classes si tri par classe ? Non demandé explicitement, on laisse continu.
-        });
-    }
 
     if (items.length === 0) return alert("Rien à générer.");
 
-    // --- 2. CONFIGURATION GRILLE ---
+    // 3. Configuration Grille
     let nbCols = 2;
     let nbRows = 8;
-    
     if (params.mode === 'CUSTOM') {
-        nbCols = parseInt(params.custom.cols);
-        nbRows = parseInt(params.custom.rows);
+        nbCols = parseInt(params.custom.cols) || 2;
+        nbRows = parseInt(params.custom.rows) || 8;
     }
 
-    const m = 10; // Marge page
-    const boxW = (210 - 2*m) / nbCols;
-    const boxH = (297 - 2*m) / nbRows;
+    const m = 10; 
+    const pageW = 210;
+    const pageH = 297;
+    const boxW = (pageW - (2 * m)) / nbCols;
+    const boxH = (pageH - (2 * m)) / nbRows;
     const perPage = nbCols * nbRows;
 
     let idxPage = 0;
 
-    // Nettoyage fin
+    // Nettoyage
     while(items.length > 0 && items[items.length-1].type === 'BREAK') items.pop();
 
-    // --- 3. RENDU GRAPHIQUE ---
+    // 4. Boucle d'impression
     items.forEach((item, i) => {
-        // Gestion Saut de Page Force
+        // Saut de page forcé
         if (item.type === 'BREAK') {
             const remainder = idxPage % perPage;
             if (remainder !== 0) idxPage += (perPage - remainder);
             return;
         }
 
-        // Nouvelle page physique
-        const isNewPage = (idxPage > 0 && idxPage % perPage === 0);
-        if (i === 0 || isNewPage) {
-            if (i > 0) doc.addPage();
-            // Repères de coupe discrets
+        // Nouvelle Page
+        if (i === 0 || (idxPage > 0 && idxPage % perPage === 0)) {
+            if (idxPage > 0) doc.addPage();
             doc.setDrawColor(200); doc.setLineWidth(0.1);
-            doc.line(m-2, m, m, m); doc.line(210-m, m, 210-m+2, m);
-            doc.line(m-2, 297-m, m, 297-m); doc.line(210-m, 297-m, 210-m+2, 297-m);
+            doc.line(m-2, m, m, m); doc.line(pageW-m, m, pageW-m+2, m);
+            doc.line(m-2, pageH-m, m, pageH-m); doc.line(pageW-m, pageH-m, pageW-m+2, pageH-m);
         }
 
         const col = idxPage % nbCols;
         const row = Math.floor((idxPage % perPage) / nbCols);
-        const x = m + col * boxW;
-        const y = m + row * boxH;
-        const cx = x + boxW/2;
+        const x = m + (col * boxW);
+        const y = m + (row * boxH);
+        const cutX = x + (boxW * 0.5); 
+        const s = item.student;
 
-        // Contour étiquette (Gris très clair)
+        // Cadre
         doc.setDrawColor(230); doc.setLineWidth(0.1);
         doc.rect(x, y, boxW, boxH);
 
-        const s = item.student;
-
-        // ============================================
-        // === RENDU : MODE OFFICIEL DNB (Massicot) ===
-        // ============================================
-        if (params.mode === 'DNB') {
-            const cutY = y + (boxH * 0.45);
-            
-            // --- Zone HAUTE (Admin) ---
-            doc.setFillColor(248, 249, 250);
-            doc.rect(x, y, boxW, (cutY - y), 'F');
-            
-            doc.setTextColor(0); 
-            doc.setFontSize(10); doc.setFont("helvetica", "bold");
-            doc.text(`${s.nom} ${s.prenom}`.toUpperCase(), x + 3, y + 6);
-            
-            doc.setFontSize(9); doc.setFont("helvetica", "normal");
-            doc.text(`Classe: ${s.classe}`, x + boxW - 3, y + 6, {align:'right'});
-            
-            doc.setFontSize(8); doc.setTextColor(100);
-            doc.text(`Salle: ${item.room} | Né(e) le: ${s.ddn || s.dob || '--'}`, x + 3, cutY - 3);
-
-            // Indicateur Aménagement (petit rond coloré si présent)
-            if (s.tiersTemps || s.amenagements) {
-                doc.setFillColor(231, 76, 60); // Rouge
-                doc.circle(x + boxW - 5, cutY - 4, 1.5, 'F');
-            }
-
-            // Ligne de coupe
-            doc.setDrawColor(0); doc.setLineWidth(0.2); doc.setLineDash([2, 2], 0);
-            doc.line(x, cutY, x + boxW, cutY);
-            doc.setLineDash([]);
-
-            // --- Zone BASSE (Copie) ---
-            doc.setTextColor(0); doc.setFont("helvetica", "bold");
-            doc.setFontSize(22);
-            const bottomCenterY = cutY + ((y + boxH - cutY) / 2) + 2;
-            doc.text(s.anonymat || "---", cx, bottomCenterY, {align:'center'});
-
-            doc.setFontSize(8); doc.setTextColor(80);
-            doc.text(item.exam.toUpperCase(), x + 3, y + boxH - 2);
+        // Point Rouge (Commun)
+        if (s.tiersTemps || s.amenagements || (s.labels && s.labels.length > 0)) {
+            doc.setFillColor(231, 76, 60);
+            doc.circle(x + boxW - 4, y + 4, 1.5, 'F');
         }
 
-        // ============================================
-        // === RENDU : MODE PERSONNALISÉ (Custom) ===
-        // ============================================
+        // --- MODE DNB ---
+        if (params.mode === 'DNB') {
+            doc.setDrawColor(0); doc.setLineWidth(0.2); doc.setLineDash([2, 2], 0);
+            doc.line(cutX, y, cutX, y + boxH);
+            doc.setLineDash([]);
+            doc.setFontSize(10); doc.setTextColor(150); doc.text("✂", cutX - 1.5, y + boxH - 1);
+
+            // GAUCHE : ANONYMAT + SALLE
+            const centerXLeft = x + (boxW * 0.25);
+            const centerY = y + (boxH / 2);
+
+            doc.setTextColor(0); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+            doc.text(s.anonymat || "---", centerXLeft, centerY - 3, {align:'center'});
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text(`Salle : ${item.room}`, centerXLeft, centerY + 2, {align:'center'});
+
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text(item.exam || "", centerXLeft, y + boxH - 4, {align:'center', maxWidth:(boxW*0.45)});
+
+            // DROITE : IDENTITÉ
+            const mx = cutX + 3;
+            doc.setTextColor(0); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+            doc.text(`${s.nom}`.toUpperCase(), mx, y + 7);
+            doc.setFont("helvetica", "normal"); doc.text(`${s.prenom}`, mx, y + 12);
+            doc.setFontSize(9); doc.text(`Classe: ${s.classe}`, mx, y + 17);
+            doc.setFontSize(8); doc.setFont("helvetica", "oblique");
+            let examText = item.exam || "";
+            if(examText.length > 22) examText = examText.substring(0, 22) + "...";
+            doc.text(examText, mx, y + 23);
+            doc.setFont("helvetica", "bold"); doc.text(`${s.anonymat}`, mx, y + boxH - 4);
+        }
+
+        // --- MODE CUSTOM ---
         else {
-            const cfg = params.custom;
-            
-            // Fonction Helper pour écrire une liste de champs
-            const drawFields = (fieldList, dx, dy, w, h, align='left') => {
-                let currentY = dy + 5;
-                const lineHeight = 5;
-                
+            const cfg = params.custom || {};
+            const showCutLine = (cfg.hasCutLine === true);
+
+            if (showCutLine) {
+                doc.setDrawColor(0); doc.setLineWidth(0.2); doc.setLineDash([2, 2], 0);
+                doc.line(cutX, y, cutX, y + boxH);
+                doc.setLineDash([]);
+                doc.setFontSize(10); doc.setTextColor(150); doc.text("✂", cutX - 1.5, y + boxH - 1);
+            }
+
+            const drawFields = (list, dx, dy, w, align) => {
+                if (!list) return;
+                let cy = dy + 6;
                 doc.setTextColor(0);
-                
-                fieldList.forEach(f => {
-                    let txt = "";
-                    let isBold = false;
-                    let size = 9;
-
-                    switch(f) {
-                        case 'nom': txt = `${s.nom} ${s.prenom}`; isBold=true; size=11; break;
-                        case 'classe': txt = `Classe: ${s.classe}`; break;
-                        case 'ddn': txt = `Né(e): ${s.ddn || '--'}`; size=8; break;
-                        case 'salle': txt = `Salle: ${item.room}`; isBold=true; break;
-                        case 'anonymat': txt = s.anonymat || "Code manquant"; isBold=true; size=14; break;
-                        case 'epreuve': txt = item.exam; size=8; color=[100,100,100]; break;
-                        case 'amenagement': 
-                            if(s.tiersTemps || s.amenagements) {
-                                txt = "AMÉNAGEMENT"; 
-                                doc.setTextColor(231, 76, 60); isBold=true;
-                            }
-                            break;
-                    }
-
-                    if(!txt) return;
-
-                    doc.setFontSize(size);
-                    doc.setFont("helvetica", isBold ? "bold" : "normal");
+                list.forEach(f => {
+                    let txt="", isBold=false, size=9, color=0;
+                    if (f==='nom') { txt=`${s.nom} ${s.prenom}`; isBold=true; size=10; }
+                    else if (f==='classe') txt=`Classe: ${s.classe}`;
+                    else if (f==='ddn') { txt=`Né(e): ${s.ddn||'--'}`; size=8; }
+                    else if (f==='salle') { txt=`Salle: ${item.room}`; isBold=true; }
+                    else if (f==='anonymat') { txt=s.anonymat||"---"; isBold=true; size=12; }
+                    else if (f==='epreuve') { txt=item.exam||""; size=8; color=100; }
                     
-                    if (align === 'center') doc.text(txt, dx + w/2, currentY, {align:'center'});
-                    else if (align === 'right') doc.text(txt, dx + w - 2, currentY, {align:'right'});
-                    else doc.text(txt, dx + 2, currentY);
-
-                    doc.setTextColor(0); // Reset color
-                    currentY += (size/3) + 3; // Espacement dynamique
+                    if(!txt) return;
+                    doc.setFontSize(size); doc.setFont("helvetica", isBold?"bold":"normal");
+                    if(typeof color==='number') doc.setTextColor(color); else doc.setTextColor(color[0],color[1],color[2]);
+                    
+                    if(align==='center') doc.text(txt, dx+w/2, cy, {align:'center', maxWidth:w-2});
+                    else if(align==='right') doc.text(txt, dx+w-2, cy, {align:'right', maxWidth:w-2});
+                    else doc.text(txt, dx+2, cy, {maxWidth:w-2});
+                    cy += (size/3)+3;
                 });
             };
 
-            if (cfg.hasCutLine) {
-                // AVEC DÉCOUPE (Séparation 50/50 ou 40/60)
-                const cutY = y + (boxH * 0.5);
-                
-                // Ligne de coupe
-                doc.setDrawColor(0); doc.setLineWidth(0.2); doc.setLineDash([3, 3], 0);
-                doc.line(x, cutY, x + boxW, cutY);
-                doc.setLineDash([]);
-                doc.setFontSize(8); doc.setTextColor(150); doc.text("✂", x + boxW - 4, cutY + 1, {align:'right'});
-
-                // Zone 1 (Haut)
-                drawFields(cfg.zone1, x, y, boxW, (cutY - y));
-                // Zone 2 (Bas)
-                drawFields(cfg.zone2, x, cutY, boxW, (y + boxH - cutY), 'center');
-
+            if (showCutLine) {
+                drawFields(cfg.zone1, x, y, (boxW*0.5), 'left');
+                drawFields(cfg.zone2, cutX+1, y, (boxW*0.5)-1, 'left');
             } else {
-                // SANS DÉCOUPE (Tout dans le même bloc)
-                // On affiche Zone 1 à gauche et Zone 2 à droite (ou l'une sous l'autre si trop de champs)
-                
-                // Approche simple : Zone 1 alignée gauche, Zone 2 alignée droite
-                drawFields(cfg.zone1, x, y, boxW/2, boxH, 'left');
-                drawFields(cfg.zone2, x + boxW/2, y, boxW/2, boxH, 'right');
+                drawFields(cfg.zone1, x, y, (boxW*0.5), 'left');
+                drawFields(cfg.zone2, x+(boxW*0.5), y, (boxW*0.5), 'left');
             }
         }
 
         idxPage++;
     });
 
-    doc.save(`Etiquettes_DNB_${params.mode}.pdf`);
-}
-
+    doc.save(`Etiquettes_Copies_${params.mode}.pdf`);
+};
     
 
 /**
