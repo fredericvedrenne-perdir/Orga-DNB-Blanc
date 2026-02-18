@@ -484,6 +484,99 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
 .btn-primary { background: #3498db; color: white; }
 .btn-primary:hover { background: #2980b9; }
 /* --------------------------- */
+/* --- WIDGET FEEDBACK / CHAT --- */
+.feedback-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10000;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* Le bouton flottant (FAB) */
+.feedback-btn {
+    width: 60px;
+    height: 60px;
+    background-color: var(--secondary);
+    color: white;
+    border-radius: 50%;
+    border: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    cursor: pointer;
+    font-size: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s, background-color 0.3s;
+}
+
+.feedback-btn:hover {
+    transform: scale(1.1);
+    background-color: #2980b9;
+}
+
+/* La fenêtre de chat */
+.feedback-box {
+    position: absolute;
+    bottom: 80px;
+    right: 0;
+    width: 320px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    display: none; /* Caché par défaut */
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #ddd;
+    animation: slideUp 0.3s ease-out;
+}
+
+.feedback-header {
+    background-color: var(--primary);
+    color: white;
+    padding: 15px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.feedback-body {
+    padding: 15px;
+    background-color: #f9f9f9;
+}
+
+.feedback-body label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+    color: #333;
+    font-weight: 600;
+}
+
+.feedback-body select, 
+.feedback-body textarea {
+    width: 100%;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 8px;
+    font-family: inherit;
+    resize: none;
+}
+
+.feedback-footer {
+    padding: 10px 15px;
+    background: white;
+    border-top: 1px solid #eee;
+    text-align: right;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 </style>
 </head>
 <body>
@@ -965,7 +1058,35 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
 
 </div> 
 
+<div class="feedback-widget">
+    <div class="feedback-box" id="feedbackBox">
+        <div class="feedback-header">
+            <span>💬 Aide & Support</span>
+            <span style="cursor:pointer; font-size:1.2rem;" onclick="toggleFeedback()">×</span>
+        </div>
+        <div class="feedback-body">
+            <label>Sujet :</label>
+            <select id="fbType" onchange="checkAttachmentHint()">
+                <option value="BUG">🐛 Signaler un Bug</option>
+                <option value="IDEE">💡 Proposer une amélioration</option>
+                <option value="AIDE">❓ Demande d'aide</option>
+            </select>
 
+            <div id="pjHint" class="attachment-hint">
+                📎 <strong>Conseil :</strong> Une fois le mail ouvert, pensez à joindre votre fichier de sauvegarde pour que je puisse corriger le bug !
+            </div>
+
+            <label>Message :</label>
+            <textarea id="fbMessage" rows="5" placeholder="Décrivez le problème..."></textarea>
+        </div>
+        <div class="feedback-footer">
+            <button class="btn btn-secondary" onclick="toggleFeedback()" style="margin-right:5px; font-size:0.9rem;">Fermer</button>
+            <button class="btn btn-primary" onclick="sendFeedbackEmail()" style="font-size:0.9rem;">Préparer l'email 🚀</button>
+        </div>
+    </div>
+
+    <button class="feedback-btn" onclick="toggleFeedback()" title="Contact Support">💬</button>
+</div>
 <div id="planning-profs" class="section">
     <div class="card">
         <div class="card-header-flex">
@@ -1284,6 +1405,8 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
     </button>
 </div>
 </div>
+
+
 
 </body>
 </html>
@@ -8432,6 +8555,69 @@ window.deleteSignature = function() {
         checkSignature(); 
     }
 };
+
+// --- GESTION DU WIDGET FEEDBACK ---
+function toggleFeedback() {
+        const box = document.getElementById('feedbackBox');
+        // On vérifie le style calculé pour être sûr de l'état
+        const isHidden = (getComputedStyle(box).display === 'none');
+        
+        box.style.display = isHidden ? 'flex' : 'none';
+        
+        if (isHidden) {
+            setTimeout(() => document.getElementById('fbMessage').focus(), 100);
+        }
+    }
+
+    // Envoi du mail avec les infos techniques
+    function sendFeedbackEmail() {
+        const typeSelect = document.getElementById('fbType');
+        const typeLabel = typeSelect.options[typeSelect.selectedIndex].text;
+        const msg = document.getElementById('fbMessage').value;
+        
+        if(!msg.trim()) {
+            alert("Merci de saisir un message avant d'envoyer.");
+            return;
+        }
+
+        // --- 1. RÉCUPÉRATION DES INFOS ---
+        const screenRes = `${window.screen.width} x ${window.screen.height}`;
+        const windowSize = `${window.innerWidth} x ${window.innerHeight}`;
+        const userAgent = navigator.userAgent;
+
+        // Récupération sécurisée depuis votre base DB
+        let schoolName = "Non défini";
+        let schoolCity = "Non défini";
+
+        if (typeof DB !== 'undefined' && DB.config) {
+            schoolName = DB.config.schoolName || "Nom manquant";
+            // Tente de trouver la ville dans plusieurs champs possibles
+            schoolCity = DB.config.schoolCity || DB.config.city || DB.config.commune || DB.config.ville || "Ville manquante";
+        }
+
+        // --- 2. PRÉPARATION EMAIL ---
+        // ⚠️ REMPLACEZ PAR VOTRE EMAIL ICI
+        const destEmail = "vedrenne.fred@gmail.com"; 
+        
+        const subject = encodeURIComponent(`[Orga DNB] ${typeLabel} - ${schoolCity}`);
+        
+        const bodyContent = `Bonjour,\n\n${msg}\n\n` +
+                            `--------------------------------\n` +
+                            `INFOS CONTEXTE (AUTO) :\n` +
+                            `🏫 Établissement : ${schoolName}\n` +
+                            `📍 Ville : ${schoolCity}\n` +
+                            `🖥️ Résolution : ${screenRes}\n` +
+                            `📏 Fenêtre : ${windowSize}\n` +
+                            `🌍 Navigateur : ${userAgent}`;
+        
+        const body = encodeURIComponent(bodyContent);
+
+        // --- 3. ENVOI ---
+        window.location.href = `mailto:${destEmail}?subject=${subject}&body=${body}`;
+        
+        // Fermer après envoi
+        toggleFeedback();
+    }
 // ----------------------
 </script>
 
