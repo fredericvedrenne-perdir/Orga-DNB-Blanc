@@ -3351,6 +3351,12 @@ function executeDistribution() {
 // =========================================================
 // === EXPORT CONVOCATIONS ÉLÈVES (V3 : TITRES CENTRÉS) ===
 // =========================================================
+// =========================================================
+// === EXPORT CONVOCATIONS ÉLÈVES (MISE À JOUR) ===
+// =========================================================
+// =========================================================
+// === EXPORT CONVOCATIONS ÉLÈVES (MISE À JOUR) ===
+// =========================================================
 window.exportConvocationStudents = function(targetId = null) {
     const txtArea = document.getElementById('txtConvocInfo');
     if(txtArea) txtArea.style.height = "250px";
@@ -3415,56 +3421,73 @@ window.exportConvocationStudents = function(targetId = null) {
             
             doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5);
             doc.rect(15, 45, 180, 25, 'FD');
-
+            
             // --- INFO ÉLÈVE ---
             doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold");
             doc.text(`Candidat(e) : ${student.nom} ${student.prenom}`, 20, 53);
             doc.text(`Classe : ${student.classe}`, 115, 53);
-
+            
             if (student.anonymat && String(student.anonymat).trim() !== "" && String(student.anonymat) !== "undefined") {
                 doc.setTextColor(192, 57, 43);
                 doc.text(`N° Anonymat : ${student.anonymat}`, 20, 62);
             }
 
-            // --- SALLE ---
-            doc.setTextColor(0); doc.setFontSize(12); doc.setFont("helvetica","bold");
+            // --- SALLE ET LABELS (Haut de page) ---
+            doc.setTextColor(0);
+            doc.setFontSize(12);
+            doc.setFont("helvetica","bold");
             const salleText = `Salle : ${place.room}`;
             const xPositionSalle = 115;
             doc.text(salleText, xPositionSalle, 62);
 
-            if(place.isTT) {
-                const textWidth = doc.getTextWidth(salleText);
-                const ttX = xPositionSalle + textWidth + 3;
-                doc.setFontSize(10); doc.setTextColor(142, 68, 173);
-                doc.text("(Tiers-Temps)", ttX, 62);
+            const isStudentTT = (student.tt === true || (student.labels && student.labels.includes('TTEMPS')));
+            const hasOtherAmen = student.labels && student.labels.some(l => l !== 'TTEMPS' && l !== 'DNBPRO' && l !== 'SEGPA' && l !== 'ULIS');
+
+            doc.setFontSize(10);
+            
+            // On aligne les labels sur le X de la salle, mais on descend le Y à 68 (en dessous)
+            let currentX = xPositionSalle;
+            const yPositionLabels = 68;
+
+            if(isStudentTT) {
+                doc.setTextColor(142, 68, 173); // Violet TT
+                doc.text("(Tiers-Temps)", currentX, yPositionLabels);
+                currentX += doc.getTextWidth("(Tiers-Temps)") + 2; 
+            } 
+            
+            if (hasOtherAmen) {
+                doc.setTextColor(230, 126, 34); // Orange Aménagement
+                doc.text("(Aménagement)", currentX, yPositionLabels);
             }
-
+            
             // --- PLANNING ---
-            doc.setTextColor(0); doc.setFont("helvetica","normal"); doc.setFontSize(11);
+            doc.setTextColor(0);
+            doc.setFont("helvetica","normal");
+            doc.setFontSize(11);
             doc.text("Veuillez vous présenter aux épreuves selon le planning ci-dessous :", 15, 80);
-
+            
             let body = [];
             DB.exams.forEach(exam => {
                 const dateObj = new Date(exam.date + "T12:00:00");
                 const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
                 
-                const slotType = place.isTT ? 'tt' : 'std';
-                let finalStart = place.isTT ? (exam.timeTT || exam.time) : exam.time;
+                const slotType = isStudentTT ? 'tt' : 'std';
+                let finalStart = isStudentTT ? (exam.timeTT || exam.time) : exam.time;
                 let finalEnd = "";
-                let finalDurVal = place.isTT ? exam.durTT : exam.durStd;
+                let finalDurVal = isStudentTT ? exam.durTT : exam.durStd;
 
                 if (exam.slots && exam.slots[slotType] && exam.slots[slotType].length > 0) {
                     finalStart = exam.slots[slotType][0].start;
                     const lastSlot = exam.slots[slotType][exam.slots[slotType].length - 1];
-                    finalEnd = lastSlot.end; 
+                    finalEnd = lastSlot.end;
                 } else {
                     finalEnd = addMinutes(finalStart, finalDurVal);
                 }
-                
+
                 body.push([
-                    dateStr.charAt(0).toUpperCase() + dateStr.slice(1),
-                    exam.name,
-                    finalStart,
+                    dateStr.charAt(0).toUpperCase() + dateStr.slice(1), 
+                    exam.name, 
+                    finalStart, 
                     finalEnd
                 ]);
             });
@@ -3474,21 +3497,13 @@ window.exportConvocationStudents = function(targetId = null) {
                 body: body,
                 startY: 85,
                 theme: 'grid',
-                headStyles: { 
-                    fillColor: [44,62,80],
-                    halign: 'center', // <--- C'est ici que ça se joue : Centre TOUS les titres
-                    valign: 'middle'
-                },
-                styles: { 
-                    cellPadding: 3, 
-                    valign: 'middle', 
-                    fontSize: 10
-                },
-                columnStyles: { 
-                    0: { halign: 'left' },   // Date : Texte à gauche
-                    1: { halign: 'left' },   // Épreuve : Texte à gauche
-                    2: { halign: 'center' }, // Début : Texte centré
-                    3: { halign: 'center', fontStyle:'bold' } // Fin : Texte centré et gras
+                headStyles: { fillColor: [44,62,80], halign: 'center', valign: 'middle' },
+                styles: { cellPadding: 3, valign: 'middle', fontSize: 10 },
+                columnStyles: {
+                    0: { halign: 'left' },
+                    1: { halign: 'left' },
+                    2: { halign: 'center' },
+                    3: { halign: 'center', fontStyle:'bold' }
                 }
             });
 
@@ -3496,51 +3511,120 @@ window.exportConvocationStudents = function(targetId = null) {
             let currentY = doc.lastAutoTable.finalY + 10;
             const signatureHeight = 40;
             const bottomMargin = 15;
+            doc.setFontSize(10);
+            doc.setFont("helvetica","normal");
             
-            doc.setFontSize(10); doc.setFont("helvetica","normal");
             const textLines = doc.splitTextToSize(customText, TEXT_WIDTH);
             const textHeight = textLines.length * 5;
-            
             const spaceRemaining = PAGE_H - currentY - bottomMargin;
             const spaceNeededTotal = textHeight + signatureHeight + 10;
-            
             let signatureY = 0;
 
             if(spaceNeededTotal < spaceRemaining) {
-                doc.setFont("helvetica","bold"); doc.text("INFORMATIONS :", 20, currentY);
-                doc.setFont("helvetica","normal"); doc.text(textLines, 20, currentY + 6);
+                doc.setFont("helvetica","bold");
+                doc.text("INFORMATIONS :", 20, currentY);
+                doc.setFont("helvetica","normal");
+                doc.text(textLines, 20, currentY + 6);
                 signatureY = currentY + 6 + textHeight + 10;
             } else {
                 const boxH = 16;
-                doc.setDrawColor(192, 57, 43); doc.setLineWidth(0.8); doc.setFillColor(250, 229, 211);
+                doc.setDrawColor(192, 57, 43);
+                doc.setLineWidth(0.8);
+                doc.setFillColor(250, 229, 211);
                 doc.roundedRect(MARGIN, currentY, TEXT_WIDTH, boxH, 2, 2, 'FD');
+                
                 doc.setFillColor(241, 196, 15);
                 doc.triangle(MARGIN+5, currentY+11, MARGIN+8, currentY+5, MARGIN+11, currentY+11, 'F');
                 
-                doc.setFontSize(11); doc.setTextColor(192, 57, 43); doc.setFont("helvetica","bold");
+                doc.setFontSize(11);
+                doc.setTextColor(192, 57, 43);
+                doc.setFont("helvetica","bold");
                 doc.text("VOIR CONSIGNES DÉTAILLÉES AU VERSO", 105, currentY + 10, {align:'center'});
                 
                 signatureY = currentY + 30;
                 
                 doc.addPage();
-                doc.setFontSize(16); doc.setTextColor(44,62,80);
+                doc.setFontSize(16);
+                doc.setTextColor(44,62,80);
                 doc.text("CONSIGNES & INFORMATIONS", 105, 20, {align:'center'});
-                doc.setDrawColor(200); doc.setLineWidth(0.5);
+                doc.setDrawColor(200);
+                doc.setLineWidth(0.5);
                 doc.line(MARGIN, 25, PAGE_W - MARGIN, 25);
                 
-                doc.setFontSize(11); doc.setTextColor(0); doc.setFont("helvetica","normal");
+                doc.setFontSize(11);
+                doc.setTextColor(0);
+                doc.setFont("helvetica","normal");
                 const versoLines = doc.splitTextToSize(customText, TEXT_WIDTH);
                 doc.text(versoLines, MARGIN, 35);
-                doc.setPage(doc.internal.getNumberOfPages() - 1);
+                
+                doc.setPage(doc.internal.getNumberOfPages() - 1); // Retour à la page Recto
             }
 
-            // --- SIGNATURE ---
-            const centerX = 140;
-            if(signatureY > 260) signatureY = 260;
+            // =========================================================
+            // --- BAS DE PAGE : AMÉNAGEMENTS (GAUCHE) & SIGNATURE (DROITE) ---
+            // =========================================================
+            if(signatureY > 255) signatureY = 255; // Sécurité pour ne pas déborder en bas
             
-            doc.setTextColor(0); doc.setFontSize(11); doc.setFont("helvetica","normal");
+            // 1. L'encart des aménagements (En bas à gauche)
+            const labelsExclus = ['DNBPRO', 'SEGPA', 'ULIS'];
+            const amenagementsEleve = (student.labels || []).filter(l => !labelsExclus.includes(l));
+
+            if (amenagementsEleve.length > 0) {
+                const getLabelDesc = (code) => {
+                    // 1. On cherche d'abord dans VOS données saisies (DB.config.labels)
+                    if (typeof DB !== 'undefined' && DB.config && DB.config.labels) {
+                        const found = DB.config.labels.find(lbl => lbl.code === code);
+                        // On retourne le champ 'name' qui contient votre description
+                        if (found && found.name && found.name.trim() !== "") {
+                            return found.name; 
+                        }
+                    }
+                    
+                    // 2. Dictionnaire de secours (au cas où la base serait indisponible)
+                    const dico = {
+                        'TTEMPS': "Tiers-Temps (Temps majoré)",
+                        'ORDI': "Utilisation d'un ordinateur",
+                        'AESH': "Assistance d'un(e) AESH",
+                        'ISOLE': "Composition en salle isolée",
+                        'SCRIPTE': "Secrétaire / scripte",
+                        'LECTEUR': "Lecteur pour les consignes",
+                        'PAUSES': "Pauses de compensation",
+                        'AGRANDI': "Sujets en format agrandi"
+                    };
+                    return dico[code] || code; // Si introuvable, on affiche juste le code brut
+                };
+
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "bolditalic");
+                let lignesEncart = ["Aménagement(s) mis en œuvre :"];
+                
+                doc.setFont("helvetica", "italic");
+                // Découpage propre de chaque puce pour qu'elle tienne dans la largeur de la boîte (90mm)
+                amenagementsEleve.forEach(code => {
+                    const desc = `• ${getLabelDesc(code)}`;
+                    const wrapped = doc.splitTextToSize(desc, 90);
+                    lignesEncart = lignesEncart.concat(wrapped);
+                });
+
+                const hauteurBoite = (lignesEncart.length * 4) + 4;
+                
+                // Dessin de la boîte à gauche
+                doc.setFillColor(255, 250, 230); // Jaune pâle
+                doc.setDrawColor(241, 196, 15);  // Bordure
+                doc.setLineWidth(0.3);
+                doc.rect(15, signatureY - 4, 95, hauteurBoite, 'FD');
+
+                // Texte dans la boîte
+                doc.setTextColor(120, 66, 18);
+                doc.text(lignesEncart, 17, signatureY);
+            }
+
+            // 2. Signature (En bas à droite)
+            const centerX = 150; // Déplacé légèrement vers la droite pour équilibrer avec la boîte
+            doc.setTextColor(0);
+            doc.setFontSize(11);
+            doc.setFont("helvetica","normal");
             doc.text(`Fait à ${DB.config.city || "SJI"}, le ${new Date().toLocaleDateString()}`, centerX, signatureY, {align:'center'});
-            
             doc.setFont("helvetica","bold");
             doc.text(DB.config.director.civ || "Le Chef d'Établissement", centerX, signatureY + 5, {align:'center'});
             doc.text(DB.config.director.name || "", centerX, signatureY + 10, {align:'center'});
@@ -3549,7 +3633,8 @@ window.exportConvocationStudents = function(targetId = null) {
                 try {
                     const imgProps = doc.getImageProperties(DB.config.signature);
                     const ratio = imgProps.width / imgProps.height;
-                    const h = 20; const w = h * ratio;
+                    const h = 20;
+                    const w = h * ratio;
                     doc.addImage(DB.config.signature, 'PNG', centerX - (w/2), signatureY+15, w, h);
                 } catch(e) {}
             }
@@ -3565,22 +3650,37 @@ window.exportConvocationStudents = function(targetId = null) {
 
     // --- POPUP CHOIX TRI ---
     const overlay = document.createElement('div');
-    Object.assign(overlay.style, { position:'fixed', top:'0', left:'0', width:'100%', height:'100%', backgroundColor:'rgba(0,0,0,0.6)', zIndex:'9999', display:'flex', justifyContent:'center', alignItems:'center' });
-    
+    Object.assign(overlay.style, {
+        position:'fixed', top:'0', left:'0', width:'100%', height:'100%',
+        backgroundColor:'rgba(0,0,0,0.6)', zIndex:'9999',
+        display:'flex', justifyContent:'center', alignItems:'center'
+    });
+
     const modal = document.createElement('div');
-    Object.assign(modal.style, { backgroundColor:'white', padding:'30px', borderRadius:'12px', boxShadow:'0 10px 25px rgba(0,0,0,0.2)', textAlign:'center', maxWidth:'600px', width:'90%', fontFamily:'Helvetica, sans-serif' });
-    
+    Object.assign(modal.style, {
+        backgroundColor:'white', padding:'30px', borderRadius:'12px',
+        boxShadow:'0 10px 25px rgba(0,0,0,0.2)', textAlign:'center',
+        maxWidth:'600px', width:'90%', fontFamily:'Helvetica, sans-serif'
+    });
+
     modal.innerHTML = `<h3 style="color:#2c3e50; margin-top:0;">🖨️ Imprimer les Convocations</h3>`;
-    
+
     const btnContainer = document.createElement('div');
-    Object.assign(btnContainer.style, { display:'flex', gap:'20px', marginTop:'25px', justifyContent:'center' });
+    Object.assign(btnContainer.style, {
+        display:'flex', gap:'20px', marginTop:'25px', justifyContent:'center'
+    });
 
     function createCard(emoji, title, desc, color, action) {
         const card = document.createElement('div');
-        Object.assign(card.style, { flex:'1', padding:'20px', border:'2px solid #eee', borderRadius:'10px', cursor:'pointer', transition:'all 0.2s', backgroundColor:'#f8f9fa' });
+        Object.assign(card.style, {
+            flex:'1', padding:'20px', border:'2px solid #eee', borderRadius:'10px',
+            cursor:'pointer', transition:'all 0.2s', backgroundColor:'#f8f9fa'
+        });
         card.innerHTML = `<div style="font-size:40px; margin-bottom:10px;">${emoji}</div><div style="font-weight:bold; color:${color}; font-size:16px;">${title}</div><div style="font-size:12px; color:#7f8c8d; margin-top:5px;">${desc}</div>`;
-        
-        card.onclick = () => { document.body.removeChild(overlay); action(); };
+        card.onclick = () => {
+            document.body.removeChild(overlay);
+            action();
+        };
         return card;
     }
 
@@ -3592,7 +3692,10 @@ window.exportConvocationStudents = function(targetId = null) {
 
     const btnCancel = document.createElement('div');
     btnCancel.innerText = "Annuler";
-    Object.assign(btnCancel.style, { marginTop:"20px", color:"#999", cursor:"pointer", fontSize:"14px", textDecoration:"underline" });
+    Object.assign(btnCancel.style, {
+        marginTop:"20px", color:"#999", cursor:"pointer",
+        fontSize:"14px", textDecoration:"underline"
+    });
     btnCancel.onclick = () => document.body.removeChild(overlay);
     modal.appendChild(btnCancel);
 
