@@ -4121,11 +4121,15 @@ window.openTableLabelConfig = function() {
 /**
  * Moteur de rendu PDF dédié aux Étiquettes de TABLE
  */
+/**
+ * Moteur de rendu PDF dédié aux Étiquettes de TABLE
+ */
 function generateTableLabelsPDF(nbCols, nbRows) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const items = [];
 
+    // 1. Récupération des élèves
     if (DB.distribution && Object.keys(DB.distribution).length > 0) {
         Object.keys(DB.distribution).sort().forEach(roomName => {
             DB.distribution[roomName].forEach(s => {
@@ -4137,90 +4141,62 @@ function generateTableLabelsPDF(nbCols, nbRows) {
                 });
             });
         });
-    }  else {
-            // === MODE PERSONNALISÉ (CUSTOM) ===
-            const cfg = params.custom;
+    } else {
+        DB.students.forEach(s => items.push({
+            room: "NON PLACÉ",
+            name: `${s.nom} ${s.prenom}`,
+            classe: s.classe,
+            code: s.anonymat || ""
+        }));
+    }
 
-            // Fonction Helper pour dessiner la liste des champs
-            const drawFields = (fieldList, dx, dy, w, h, align = 'left') => {
-                let currentY = dy + 6; // Marge haute
-                doc.setTextColor(0);
-                
-                fieldList.forEach(f => {
-                    let txt = "";
-                    let isBold = false;
-                    let size = 9;
-                    let color = 0;
+    // 2. Calcul des dimensions
+    const m = 10;
+    const boxW = (210 - 2*m) / nbCols;
+    const boxH = (297 - 2*m) / nbRows;
+    const perPage = nbCols * nbRows;
 
-                    // Configuration des champs
-                    switch (f) {
-                        case 'nom': txt = `${s.nom} ${s.prenom}`; isBold = true; size = 10; break;
-                        case 'classe': txt = `Classe: ${s.classe}`; break;
-                        case 'ddn': txt = `Né(e): ${s.ddn || s.dob || '--'}`; size = 8; break;
-                        case 'salle': txt = `Salle: ${item.room}`; isBold = true; break;
-                        case 'anonymat': txt = s.anonymat || ""; isBold = true; size = 12; break;
-                        case 'epreuve': txt = item.exam; size = 8; color = 100; break;
-                        case 'amenagement': 
-                            if (s.tiersTemps || s.amenagements) {
-                                txt = "AMÉNAGEMENT"; 
-                                color = [231, 76, 60]; // Rouge
-                                isBold = true;
-                            }
-                            break;
-                    }
-
-                    if (!txt) return;
-
-                    // Application du style
-                    doc.setFontSize(size);
-                    if(Array.isArray(color)) doc.setTextColor(color[0], color[1], color[2]);
-                    else doc.setTextColor(color);
-                    
-                    doc.setFont("helvetica", isBold ? "bold" : "normal");
-
-                    // Dessin du texte
-                    if (align === 'center') doc.text(txt, dx + w / 2, currentY, { align: 'center', maxWidth: w-2 });
-                    else if (align === 'right') doc.text(txt, dx + w - 2, currentY, { align: 'right', maxWidth: w-2 });
-                    else doc.text(txt, dx + 2, currentY, { maxWidth: w-2 });
-
-                    // Reset couleur et saut de ligne
-                    doc.setTextColor(0);
-                    currentY += (size / 3) + 3; 
-                });
-            };
-
-            // --- GESTION DE LA DÉCOUPE (GAUCHE / DROITE) ---
-            if (cfg.hasCutLine) {
-                // Calcul du milieu vertical
-                const cutX = x + (boxW * 0.5);
-
-                // 1. Trait pointillé VERTICAL
-                doc.setDrawColor(0);
-                doc.setLineWidth(0.2);
-                doc.setLineDash([3, 3], 0);
-                doc.line(cutX, y, cutX, y + boxH); // Ligne de haut en bas
-                doc.setLineDash([]); // On remet en continu
-
-                // 2. Petit ciseau (décoratif)
-                doc.setFontSize(10);
-                doc.setTextColor(150);
-                doc.text("✂", cutX - 1.5, y + boxH - 2); 
-
-                // 3. Remplissage des zones
-                // Zone 1 à GAUCHE
-                drawFields(cfg.zone1, x, y, (boxW * 0.5), boxH, 'left');
-                
-                // Zone 2 à DROITE (avec une petite marge interne)
-                drawFields(cfg.zone2, cutX + 1, y, (boxW * 0.5) - 1, boxH, 'left');
-
-            } else {
-                // SANS DÉCOUPE
-                // On sépare quand même virtuellement en deux colonnes pour être propre
-                drawFields(cfg.zone1, x, y, (boxW * 0.5), boxH, 'left');
-                drawFields(cfg.zone2, x + (boxW * 0.5), y, (boxW * 0.5), boxH, 'left');
-            }
+    // 3. Dessin sur le PDF (C'est cette boucle qui avait disparu !)
+    items.forEach((item, i) => {
+        const idxPage = i % perPage;
+        if (i > 0 && idxPage === 0) doc.addPage();
+        
+        const col = idxPage % nbCols;
+        const row = Math.floor(idxPage / nbCols);
+        const x = m + col * boxW;
+        const y = m + row * boxH;
+        
+        const cx = x + boxW/2;
+        const cy = y + boxH/2;
+        
+        // Tracé du cadre avec pointillés
+        doc.setDrawColor(200);
+        doc.setLineDash([1, 1]);
+        doc.rect(x, y, boxW, boxH);
+        doc.setLineDash([]);
+        
+        // Textes
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        doc.text(`DNB ${DB.config.year || ""} - Salle ${item.room}`, cx, y + 8, {align:'center'});
+        
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.setFont("helvetica", "bold");
+        doc.text(item.name, cx, cy, {align:'center'});
+        
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.text(item.classe, cx, cy + 6, {align:'center'});
+        
+        if (item.code) {
+             doc.setFontSize(11);
+             doc.setTextColor(192, 57, 43);
+             doc.text(item.code, cx, y + boxH - 6, {align:'center'});
         }
-    doc.save(`Etiquettes_Table.pdf`);
+    });
+
+    doc.save("Etiquettes_Table.pdf");
 }
 
 /// =========================================================
