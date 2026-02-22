@@ -3335,9 +3335,100 @@ function executeDistribution() {
     
     // [PDF Exports]
     function drawHeader(doc, title, subtitle) { addSmartLogo(doc, 10, 10, 35); doc.setFontSize(18); doc.text(DB.config.schoolName, 60, 20); doc.setFontSize(14); doc.text("DNB Blanc - Session " + DB.config.year, 60, 28); doc.setFontSize(16); doc.text(title, 14, 45); if(subtitle) { doc.setFontSize(12); doc.text(subtitle, 14, 52); } return 60; }
-    function exportDisplayPDF() { const { jsPDF } = window.jspdf; const doc = new jsPDF(); let pageCount = 0; DB.rooms.forEach((r) => { if ((DB.distribution[r.nom] || []).length === 0) return; if (pageCount > 0) doc.addPage(); drawHeader(doc, `Liste d'affichage - Salle ${r.nom}`, r.isTT ? "Tiers-Temps" : "Standard"); const body = (DB.distribution[r.nom] || []).map(s => [s.nom, s.prenom, s.classe, s.anonymat, s.tt ? "OUI" : ""]); doc.autoTable({ head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT']], body: body, startY: 60 }); pageCount++; }); doc.save("listes_affichage.pdf"); }
-    function exportSignPDF() { const { jsPDF } = window.jspdf; const doc = new jsPDF(); let pageCount = 0; DB.exams.forEach(exam => { DB.rooms.forEach(room => { if ((DB.distribution[room.nom] || []).length === 0) return; if (pageCount > 0) doc.addPage(); const dur = room.isTT ? exam.durTT : exam.durStd; const startTime = room.isTT ? (exam.timeTT || exam.time) : exam.time; const endTime = addMinutes(startTime, dur); drawHeader(doc, `Émargement - ${exam.name} - Salle ${room.nom}`, `Date: ${exam.date} | Horaire: ${startTime} - ${endTime}`); const body = (DB.distribution[room.nom] || []).map(s => [s.nom, s.prenom, s.classe, s.anonymat, s.tt ? "TT" : "", ""]); doc.autoTable({ head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT', 'Signature']], body: body, startY: 65, columnStyles: { 4: { minCellWidth: 40 } } }); pageCount++; }); }); doc.save("feuilles_emargement.pdf"); }
+/**
+ * Génère le PDF des listes d'affichage triées par ordre alphabétique
+ * Pourquoi : Assure une lecture fluide pour les élèves devant les salles.
+ */
+function exportDisplayPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let pageCount = 0;
 
+    DB.rooms.forEach((r) => {
+        let studentsInRoom = DB.distribution[r.nom] || [];
+        if (studentsInRoom.length === 0) return;
+
+        // --- MODIFICATION : TRI ALPHABÉTIQUE ---
+        studentsInRoom.sort((a, b) => {
+            const nomA = a.nom.toUpperCase();
+            const nomB = b.nom.toUpperCase();
+            if (nomA < nomB) return -1;
+            if (nomA > nomB) return 1;
+            return a.prenom.localeCompare(b.prenom);
+        });
+
+        if (pageCount > 0) doc.addPage();
+        drawHeader(doc, `Liste d'affichage - Salle ${r.nom}`, r.isTT ? "Tiers-Temps" : "Standard");
+
+        const body = studentsInRoom.map(s => [
+            s.nom.toUpperCase(), 
+            s.prenom, 
+            s.classe, 
+            s.anonymat || "", 
+            s.tt ? "OUI" : ""
+        ]);
+
+        doc.autoTable({
+            head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT']],
+            body: body,
+            startY: 60
+        });
+        pageCount++;
+    });
+    doc.save("listes_affichage.pdf");
+}
+
+/**
+ * Génère le PDF des listes d'émargement triées par ordre alphabétique
+ * Pourquoi : Indispensable pour que les surveillants trouvent rapidement le nom du candidat.
+ */
+function exportSignPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let pageCount = 0;
+
+    DB.exams.forEach(exam => {
+        DB.rooms.forEach(room => {
+            let studentsInRoom = DB.distribution[room.nom] || [];
+            if (studentsInRoom.length === 0) return;
+
+            // --- MODIFICATION : TRI ALPHABÉTIQUE ---
+            studentsInRoom.sort((a, b) => {
+                const nomA = a.nom.toUpperCase();
+                const nomB = b.nom.toUpperCase();
+                if (nomA < nomB) return -1;
+                if (nomA > nomB) return 1;
+                return a.prenom.localeCompare(b.prenom);
+            });
+
+            if (pageCount > 0) doc.addPage();
+            const dur = room.isTT ? exam.durTT : exam.durStd;
+            const startTime = room.isTT ? (exam.timeTT || exam.time) : exam.time;
+            const endTime = addMinutes(startTime, dur);
+
+            drawHeader(doc, `Émargement - ${exam.name} - Salle ${room.nom}`, 
+                `Date: ${exam.date} | Horaire: ${startTime} - ${endTime}`);
+
+            const body = studentsInRoom.map(s => [
+                s.nom.toUpperCase(), 
+                s.prenom, 
+                s.classe, 
+                s.anonymat || "", 
+                s.tt ? "TT" : "", 
+                ""
+            ]);
+
+            doc.autoTable({
+                head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT', 'Signature']],
+                body: body,
+                startY: 65,
+                columnStyles: { 5: { minCellWidth: 40 } } // Espace pour la signature
+            });
+            pageCount++;
+        });
+    });
+    doc.save("feuilles_emargement.pdf");
+}
     function openConvocOptions() { if (!DB.config.director) DB.config.director = { civ: "M. le Principal", name: "" }; if(DB.students.length === 0) return alert("Aucun élève"); if(Object.keys(DB.distribution).length === 0) return alert("Veuillez faire la répartition"); const sel = document.getElementById('convocStudentSelect'); sel.innerHTML = '<option value="all">-- Tous les élèves --</option>'; const sortedStudents = [...DB.students].sort((a,b) => a.nom.localeCompare(b.nom)); sortedStudents.forEach(s => { let opt = document.createElement('option'); opt.value = s.id; opt.text = `${s.nom} ${s.prenom} (${s.classe})`; sel.appendChild(opt); }); document.getElementById('convocOptionsModal').style.display = 'flex'; }
     function closeConvocOptions() { document.getElementById('convocOptionsModal').style.display = 'none'; }
 
@@ -3425,7 +3516,7 @@ window.exportConvocationStudents = function(targetId = null) {
             // --- INFO ÉLÈVE ---
             doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold");
             doc.text(`Candidat(e) : ${student.nom} ${student.prenom}`, 20, 53);
-            doc.text(`Classe : ${student.classe}`, 115, 53);
+            doc.text(`Classe : ${student.classe}`, 135, 53);
             
             if (student.anonymat && String(student.anonymat).trim() !== "" && String(student.anonymat) !== "undefined") {
                 doc.setTextColor(192, 57, 43);
@@ -3437,7 +3528,7 @@ window.exportConvocationStudents = function(targetId = null) {
             doc.setFontSize(12);
             doc.setFont("helvetica","bold");
             const salleText = `Salle : ${place.room}`;
-            const xPositionSalle = 115;
+            const xPositionSalle = 135;
             doc.text(salleText, xPositionSalle, 62);
 
             const isStudentTT = (student.tt === true || (student.labels && student.labels.includes('TTEMPS')));
