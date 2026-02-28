@@ -713,12 +713,12 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
         <div id="data-eleves" class="section"><div class="card"><div class="card-header-flex"><h3>Élèves</h3><button class="lock-btn" id="lock-students" onclick="toggleLock('students')">🔓 Verrouiller</button></div><div id="wrapper-students" class=""><div class="import-box"><span class="import-title">📂 Importer Excel / CSV</span><input type="file" id="fileStudents" accept=".csv, .xlsx, .xls" style="display:none" onchange="handleFileSelect('students')"><button class="btn btn-primary" onclick="document.getElementById('fileStudents').click()">Choisir fichier</button></div></div><div style="background-color: #f0f8ff; border: 1px solid #b3d7ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                             <h4 style="margin-top:0; color:#0056b3; font-size:0.95rem;">🖨️ Logistique & Anonymat</h4>
                             <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                <button class="btn btn-secondary" onclick="openTableLabelConfig()">🏷️ Étiquettes de Table</button>
+                                <button class="btn btn-dark" onclick="openTableLabelConfig()">🏷️ Étiquettes de Table</button>
                                 
                                 <span style="border-left:1px solid #ccc; margin:0 5px;"></span>
                                 
-                                <button class="btn btn-secondary" onclick="generateAnonymityCodes()">🎲 Anonymat</button>
-								<button class="btn btn-success" onclick="exportStudentsToExcel()">📊 Export Elèves et anonymat en Excel</button>
+                                <button class="btn btn-dark" onclick="generateAnonymityCodes()">🎲 Anonymat</button>
+								<button class="btn btn-dark" onclick="exportStudentsToExcel()">📊 Export Elèves et anonymat en Excel</button>
                                 <button class="btn btn-dark" onclick="exportAnonymityList()">📜 Liste Secrétariat</button>
                                 <button class="btn btn-dark" onclick="openLabelConfig('anonymat')">✂️ Étiquettes Copies</button>
                             </div>
@@ -998,6 +998,7 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
 <button class="btn btn-primary" onclick="saveGlobalData()">💾 Enregistrer</button>
 <button class="btn btn-dark" onclick="exportDisplayPDF()">🖨️ Listes d'affichage</button>
 <button class="btn btn-dark" onclick="exportSignPDF()">✍️ Listes d'émargement</button>
+<button class="btn btn-dark" onclick="exportRoomStatsPDF()">📊 Récapitulatif Salles</button>
 <button class="btn btn-danger" id="btnResetDistrib" onclick="resetDistribution()">🗑️ Reset</button></div><div id="visualDistrib" class="dd-container"></div></div></div>
 <div id="planning-rooms" class="section">
     
@@ -1042,6 +1043,10 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
             ✨ Optimiser Salles
         </button>
         
+		<button class="btn btn-primary" style="padding:12px 20px; font-size:0.95rem; font-weight:bold;" onclick="openSpecialRoomModal()" title="Ajouter un couloir, une réserve...">
+    ➕ Ajouter un lieu
+</button>
+		
         <button class="btn btn-danger" style="padding:12px 20px; font-size:0.95rem; font-weight:bold;" onclick="resetPlanning()" title="Tout effacer">
             🗑️ Reset
         </button>
@@ -1252,6 +1257,43 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
         </div>
     </div>
 </div>
+
+<div id="specialRoomModal" class="modal-overlay" role="dialog" aria-labelledby="specialRoomTitle" aria-modal="true" style="display:none;">
+    <div class="modal-content" style="max-width: 550px;">
+        <div class="modal-header" id="specialRoomTitle">➕ Ajouter un lieu de surveillance</div>
+        <p style="color: #666; font-size: 0.95em; text-align: left;">Sélectionnez un lieu spécifique (hors salle d'examen) nécessitant une présence de surveillance :</p>
+        
+        <div class="tiles-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 15px;" role="radiogroup">
+            <div class="tile" tabindex="0" role="radio" onclick="selectSpecialRoom('Couloir', this)">
+                <div class="tile-icon">🚶</div>
+                <div class="tile-title">Couloir</div>
+            </div>
+            <div class="tile" tabindex="0" role="radio" onclick="selectSpecialRoom('Réserve', this)">
+                <div class="tile-icon">🔄</div>
+                <div class="tile-title">Réserve</div>
+            </div>
+            <div class="tile" tabindex="0" role="radio" onclick="selectSpecialRoom('Secrétariat', this)">
+                <div class="tile-icon">🖨️</div>
+                <div class="tile-title">Secrétariat</div>
+            </div>
+            <div class="tile" tabindex="0" role="radio" id="tileCustomRoom" onclick="toggleCustomSpecialRoom(true)">
+                <div class="tile-icon">✏️</div>
+                <div class="tile-title">Personnalisé...</div>
+            </div>
+        </div>
+
+        <div id="customSpecialRoomContainer" style="display:none; margin-top:15px; padding:15px; background:#f8f9fa; border-radius:8px; border:1px solid #ddd; text-align: left;">
+            <label for="customSpecialRoomInput" style="font-weight:bold; display:block; margin-bottom:5px;">Nom du lieu personnalisé :</label>
+            <input type="text" id="customSpecialRoomInput" placeholder="Ex: Cour de récréation, Infirmerie..." aria-label="Nom du lieu personnalisé" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+
+        <div class="modal-actions" style="margin-top: 25px; text-align: right;">
+            <button class="btn btn-secondary" onclick="document.getElementById('specialRoomModal').style.display='none'">Annuler</button>
+            <button class="btn btn-success" onclick="validateSpecialRoom()">✅ Ajouter au planning</button>
+        </div>
+    </div>
+</div>
+
 <div id="distribModal" class="modal-overlay"><div class="modal-content"><div class="modal-header">Assistant Répartition</div><div id="wiz-step-1" class="wizard-step active"><h4>Étape 1 : TT</h4><div class="wiz-options-grid"><label class="wiz-option-card"><input type="radio" name="wizTTMode" value="auto" checked="checked" onchange="toggleWizTTList(false)"> <strong>Automatique</strong></label><label class="wiz-option-card"><input type="radio" name="wizTTMode" value="manual" onchange="toggleWizTTList(true)"> <strong>Manuel</strong></label></div><div id="wizTTListContainer" style="display:none;" class="check-list"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeDistribWizard()">Annuler</button> <button class="btn btn-primary" onclick="wizGoToStep2()">Suivant ➔</button></div></div><div id="wiz-step-2" class="wizard-step"><h4>Étape 2 : Vérif</h4><div id="wizCapCheckMsg" style="margin:20px 0;padding:15px;border-radius:5px;background:#eee;"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="wizGoToStep(1)">⬅ Retour</button> <button class="btn btn-primary" id="btnWizStep2Next" onclick="wizGoToStep3()">Suivant ➔</button></div></div><div id="wiz-step-3" class="wizard-step"><h4>Étape 3 : Paramètres</h4><div class="wiz-section-title">Tri</div><div class="wiz-options-grid"><label class="wiz-option-card"><input type="radio" name="wizSortMode" value="global" checked="checked"><strong>Global</strong></label><label class="wiz-option-card"><input type="radio" name="wizSortMode" value="class"><strong>Par Classe</strong></label></div><div class="wiz-section-title">Remplissage TT</div><div class="wiz-options-grid"><label class="wiz-option-card"><input type="radio" name="wizFillTT" value="max" checked="checked"><strong>Max</strong></label><label class="wiz-option-card"><input type="radio" name="wizFillTT" value="balance"><strong>Équilibrer</strong></label></div><div class="wiz-section-title">Remplissage Std</div><div class="wiz-options-grid"><label class="wiz-option-card"><input type="radio" name="wizFillStd" value="max" checked="checked"><strong>Max</strong></label><label class="wiz-option-card"><input type="radio" name="wizFillStd" value="balance"><strong>Équilibrer</strong></label></div><div class="modal-actions"><button class="btn btn-secondary" onclick="wizGoToStep(2)">⬅ Retour</button> <button class="btn btn-success" onclick="executeDistribution()">Valider</button></div></div></div></div>
 <div id="convocOptionsModal" class="modal-overlay"><div class="modal-content"><div class="modal-header">Options d'Impression</div><input type="hidden" id="printType" value="convoc"><label style="font-weight:bold; margin-top:10px;">Options de Tri :</label><div class="row" style="margin-bottom:20px;"><div class="col"><label style="cursor:pointer;"><input type="radio" name="convocSort" value="alpha" checked="checked"> Alphabétique</label></div><div class="col"><label style="cursor:pointer;"><input type="radio" name="convocSort" value="class"> Par Classe</label></div></div><label style="font-weight:bold;">Sélection Élève(s) :</label><select id="convocStudentSelect" style="margin-bottom:20px;"><option value="all" selected="selected">-- Tous les élèves --</option></select><div class="modal-actions"><button class="btn btn-secondary" onclick="closeConvocOptions()">Annuler</button><button class="btn btn-success" onclick="validateConvocOptions()">✅ Générer PDF</button></div></div></div>
 
@@ -1413,7 +1455,7 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
 
 <script>
     const DEFAULT_LABELS = [
-    { code: "TTEMPS", color: "#8e44ad", name: "Tiers-Temps (Auto)" },
+    { code: "TTEMPS", color: "#8e44ad", name: "Tiers-Temps" },
 	{ code: "DNBPRO", color: "#88f10f", name: "DNB Pro" },
 	{ code: "SEGPA", color: "#0f31f1", name: "SEGPA" },
 	{ code: "ULIS", color: "#e6f10f", name: "ULIS" },
@@ -3067,34 +3109,48 @@ window.deleteTeacher = function(index) {
     const container = document.getElementById('visualDistrib');
     container.innerHTML = ''; 
     
-    // --- BLOC D'AUTO-CORRECTION (NOUVEAU) ---
-    // But : Trouver les élèves qui sont dans la base (DB.students) 
-    // mais nulle part dans la répartition (DB.distribution).
+    // --- 1. SUPPRESSION DES ÉLÈVES FANTÔMES (CORRECTIF DÉFINITIF) ---
+    // But : Nettoyer la répartition de manière fiable en utilisant la clé "Nom_Prénom"
+    const validStudentKeys = new Set(DB.students.map(s => `${s.nom}_${s.prenom}`));
+    let removedCount = 0;
     
-    // 1. On s'assure que la Zone Tampon existe dans les données
-    if(!DB.distribution["Zone Tampon"]) DB.distribution["Zone Tampon"] = [];
-    
-    // 2. On fait l'inventaire de tous les élèves déjà placés (Salles + Tampon)
-    const placedIds = new Set();
     Object.keys(DB.distribution).forEach(roomName => {
-        DB.distribution[roomName].forEach(s => placedIds.add(s.id));
+        const initialCount = DB.distribution[roomName].length;
+        
+        // On ne garde que les élèves dont la combinaison Nom + Prénom existe dans la base principale
+        DB.distribution[roomName] = DB.distribution[roomName].filter(s => {
+            return validStudentKeys.has(`${s.nom}_${s.prenom}`);
+        });
+        
+        removedCount += (initialCount - DB.distribution[roomName].length);
     });
 
-    // 3. On cherche les "Orphelins" et on les ajoute à la Zone Tampon
+    if (removedCount > 0) {
+        console.log(`🧹 Nettoyage : ${removedCount} élève(s) supprimé(s) de la répartition.`);
+    }
+
+    // --- 2. BLOC D'AUTO-CORRECTION : RÉCUPÉRATION DES ORPHELINS ---
+    // But : Trouver les élèves de DB.students qui n'ont pas encore de salle
+    if(!DB.distribution["Zone Tampon"]) DB.distribution["Zone Tampon"] = [];
+    
+    const placedKeys = new Set();
+    Object.keys(DB.distribution).forEach(roomName => {
+        DB.distribution[roomName].forEach(s => placedKeys.add(`${s.nom}_${s.prenom}`));
+    });
+
     let recoveredCount = 0;
     DB.students.forEach(student => {
-        if (!placedIds.has(student.id)) {
+        if (!placedKeys.has(`${student.nom}_${student.prenom}`)) {
             DB.distribution["Zone Tampon"].push(student);
             recoveredCount++;
         }
     });
-    // (Optionnel) Petit log pour voir si ça marche
-    if(recoveredCount > 0) console.log(`Distribution: ${recoveredCount} élèves récupérés dans la zone tampon.`);
-    // ----------------------------------------
 
+    if(recoveredCount > 0) console.log(`📥 Distribution: ${recoveredCount} élèves récupérés dans la zone tampon.`);
+
+    // --- 3. AFFICHAGE DE L'INTERFACE ---
     // Affichage de la Zone Tampon
     const bufferList = DB.distribution["Zone Tampon"];
-    // On met capacite:9999 pour que la zone tampon ne soit jamais "pleine"
     let bufferCard = createRoomCard("Zone Tampon", bufferList, {nom:"Zone Tampon", capacite:9999}, true);
     container.appendChild(bufferCard);
 
@@ -3105,6 +3161,96 @@ window.deleteTeacher = function(index) {
         let card = createRoomCard(room.nom, list, room, false);
         container.appendChild(card);
     });
+};
+
+// =========================================================
+// === GESTION DES LIEUX SPÉCIAUX (COULOIRS, RÉSERVES...) ===
+// =========================================================
+
+let currentSpecialRoomSelection = "";
+
+window.openSpecialRoomModal = function() {
+    currentSpecialRoomSelection = "";
+    document.getElementById('customSpecialRoomContainer').style.display = 'none';
+    document.getElementById('customSpecialRoomInput').value = "";
+    
+    // Reset de la sélection visuelle des tuiles
+    document.querySelectorAll('#specialRoomModal .tile').forEach(t => {
+        t.style.borderColor = '#edeff0';
+        t.style.backgroundColor = '#fdfdfd';
+        t.setAttribute('aria-checked', 'false');
+    });
+    
+    document.getElementById('specialRoomModal').style.display = 'flex';
+};
+
+window.selectSpecialRoom = function(name, element) {
+    currentSpecialRoomSelection = name;
+    document.getElementById('customSpecialRoomContainer').style.display = 'none';
+    
+    // Feedback visuel
+    document.querySelectorAll('#specialRoomModal .tile').forEach(t => {
+        t.style.borderColor = '#edeff0';
+        t.style.backgroundColor = '#fdfdfd';
+        t.setAttribute('aria-checked', 'false');
+    });
+    if(element) {
+        element.style.borderColor = '#3498db';
+        element.style.backgroundColor = '#f0f7ff';
+        element.setAttribute('aria-checked', 'true');
+    }
+};
+
+window.toggleCustomSpecialRoom = function() {
+    currentSpecialRoomSelection = "CUSTOM";
+    document.getElementById('customSpecialRoomContainer').style.display = 'block';
+    
+    document.querySelectorAll('#specialRoomModal .tile').forEach(t => {
+        t.style.borderColor = '#edeff0';
+        t.style.backgroundColor = '#fdfdfd';
+        t.setAttribute('aria-checked', 'false');
+    });
+    
+    const customTile = document.getElementById('tileCustomRoom');
+    if(customTile) {
+        customTile.style.borderColor = '#3498db';
+        customTile.style.backgroundColor = '#f0f7ff';
+        customTile.setAttribute('aria-checked', 'true');
+    }
+    
+    document.getElementById('customSpecialRoomInput').focus();
+};
+
+window.validateSpecialRoom = function() {
+    let roomName = currentSpecialRoomSelection;
+    
+    if (roomName === "CUSTOM") {
+        roomName = document.getElementById('customSpecialRoomInput').value.trim();
+        if (!roomName) return alert("Veuillez saisir un nom pour le lieu personnalisé.");
+    } else if (!roomName) {
+        return alert("Veuillez sélectionner un lieu.");
+    }
+
+    // Création de l'entité Salle (capacité 0, et isTT true pour couvrir toute la plage)
+    DB.rooms.push({
+        id: Date.now() + Math.random(),
+        nom: roomName,
+        capacite: 0, 
+        isTT: true, 
+        isAmen: false,
+        isSpecial: true
+    });
+
+    // 1. Fermeture modale
+    document.getElementById('specialRoomModal').style.display = 'none';
+    
+    // 2. Mise à jour de l'UI
+    if(typeof renderRooms === "function") renderRooms(); // Met à jour l'onglet Salles
+    if(typeof renderPlanning === "function") renderPlanning(); // Met à jour le Planning
+    
+    // 3. Sauvegarde automatique et Toast
+    if(typeof autoSave === 'function') autoSave();
+    if(typeof showToast === 'function') showToast(`Lieu "${roomName}" ajouté !`);
 };
 
 // Fonction helper pour créer les cartes (simplifie le code)
@@ -3339,16 +3485,19 @@ function executeDistribution() {
  * Génère le PDF des listes d'affichage triées par ordre alphabétique
  * Pourquoi : Assure une lecture fluide pour les élèves devant les salles.
  */
+/**
+ * Génère le PDF des listes d'affichage triées par ordre alphabétique
+ */
 function exportDisplayPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     let pageCount = 0;
-
+    
     DB.rooms.forEach((r) => {
         let studentsInRoom = DB.distribution[r.nom] || [];
         if (studentsInRoom.length === 0) return;
-
-        // --- MODIFICATION : TRI ALPHABÉTIQUE ---
+        
+        // Tri alphabétique
         studentsInRoom.sort((a, b) => {
             const nomA = a.nom.toUpperCase();
             const nomB = b.nom.toUpperCase();
@@ -3359,20 +3508,37 @@ function exportDisplayPDF() {
 
         if (pageCount > 0) doc.addPage();
         drawHeader(doc, `Liste d'affichage - Salle ${r.nom}`, r.isTT ? "Tiers-Temps" : "Standard");
-
+        
         const body = studentsInRoom.map(s => [
-            s.nom.toUpperCase(), 
-            s.prenom, 
-            s.classe, 
-            s.anonymat || "", 
+            s.nom.toUpperCase(),
+            s.prenom,
+            s.classe,
+            s.anonymat || "",
             s.tt ? "OUI" : ""
         ]);
-
+        
+        // Configuration AutoTable avec le thème "Grille"
         doc.autoTable({
             head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT']],
             body: body,
-            startY: 60
+            startY: 60,
+            theme: 'grid', // Force les bordures
+            styles: {
+                fillColor: [255, 255, 255], // Fond 100% blanc
+                textColor: [0, 0, 0], // Texte noir
+                lineColor: [0, 0, 0], // Bordure noire
+                lineWidth: 0.2 // Épaisseur de la ligne (bonne visibilité à l'impression)
+            },
+            headStyles: {
+                fillColor: [230, 230, 230], // Gris clair pour bien distinguer les colonnes
+                textColor: [0, 0, 0],
+                fontStyle: 'bold'
+            },
+            alternateRowStyles: {
+                fillColor: [255, 255, 255] // Désactive complètement l'alternance de couleurs
+            }
         });
+        
         pageCount++;
     });
     doc.save("listes_affichage.pdf");
@@ -3380,19 +3546,18 @@ function exportDisplayPDF() {
 
 /**
  * Génère le PDF des listes d'émargement triées par ordre alphabétique
- * Pourquoi : Indispensable pour que les surveillants trouvent rapidement le nom du candidat.
  */
 function exportSignPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     let pageCount = 0;
-
+    
     DB.exams.forEach(exam => {
         DB.rooms.forEach(room => {
             let studentsInRoom = DB.distribution[room.nom] || [];
             if (studentsInRoom.length === 0) return;
-
-            // --- MODIFICATION : TRI ALPHABÉTIQUE ---
+            
+            // Tri alphabétique
             studentsInRoom.sort((a, b) => {
                 const nomA = a.nom.toUpperCase();
                 const nomB = b.nom.toUpperCase();
@@ -3402,28 +3567,48 @@ function exportSignPDF() {
             });
 
             if (pageCount > 0) doc.addPage();
+            
             const dur = room.isTT ? exam.durTT : exam.durStd;
             const startTime = room.isTT ? (exam.timeTT || exam.time) : exam.time;
             const endTime = addMinutes(startTime, dur);
-
-            drawHeader(doc, `Émargement - ${exam.name} - Salle ${room.nom}`, 
-                `Date: ${exam.date} | Horaire: ${startTime} - ${endTime}`);
-
+            
+            drawHeader(doc, `Émargement - ${exam.name} - Salle ${room.nom}`, `Date: ${exam.date} | Horaire: ${startTime} - ${endTime}`);
+            
             const body = studentsInRoom.map(s => [
-                s.nom.toUpperCase(), 
-                s.prenom, 
-                s.classe, 
-                s.anonymat || "", 
-                s.tt ? "TT" : "", 
-                ""
+                s.nom.toUpperCase(),
+                s.prenom,
+                s.classe,
+                s.anonymat || "",
+                s.tt ? "TT" : "",
+                "" // Cellule vide pour la signature
             ]);
-
+            
+            // Configuration AutoTable avec le thème "Grille"
             doc.autoTable({
                 head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT', 'Signature']],
                 body: body,
                 startY: 65,
-                columnStyles: { 5: { minCellWidth: 40 } } // Espace pour la signature
+                theme: 'grid', // Force les bordures
+                styles: {
+                    fillColor: [255, 255, 255],
+                    textColor: [0, 0, 0],
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.2,
+                    valign: 'middle' // Centre le texte verticalement, idéal pour les signatures
+                },
+                headStyles: {
+                    fillColor: [230, 230, 230],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'bold'
+                },
+                alternateRowStyles: {
+                    fillColor: [255, 255, 255] // Désactive le fond alterné
+                },
+                columnStyles: { 
+                    5: { minCellWidth: 40 } // Maintient un large espace pour laisser les élèves signer
+                } 
             });
+            
             pageCount++;
         });
     });
@@ -3795,7 +3980,75 @@ window.exportConvocationStudents = function(targetId = null) {
 };
 
 
+/**
+ * Génère un document PDF récapitulant le nombre d'élèves par salle.
+ * Logique métier : Permet de connaître rapidement les effectifs totaux, 
+ * ventilés par statut (Standard / Tiers-temps).
+ */
+function exportRoomStatsPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Titre et en-tête
+    if (typeof addSmartLogo === 'function') addSmartLogo(doc, 10, 10, 35);
+    doc.setFontSize(18);
+    doc.text("Récapitulatif des Effectifs par Salle", 60, 20);
+    doc.setFontSize(12);
+    doc.text(`Établissement : ${DB.config.schoolName || 'Non défini'}`, 60, 28);
+    doc.text(`Session : ${DB.config.year || '2026'}`, 60, 34);
 
+    const tableBody = [];
+    let totalGlobal = 0;
+
+    // Récupération des données de répartition
+    // On trie les salles par nom pour un document ordonné
+    const roomNames = Object.keys(DB.distribution).sort();
+
+    roomNames.forEach(roomName => {
+        const students = DB.distribution[roomName];
+        if (students.length === 0) return; // On ignore les salles vides
+
+        const countTT = students.filter(s => s.tt).length;
+        const countStd = students.length - countTT;
+        
+        tableBody.push([
+            roomName,
+            countStd,
+            countTT,
+            students.length
+        ]);
+        
+        totalGlobal += students.length;
+    });
+
+    // Génération du tableau
+    doc.autoTable({
+        startY: 50,
+        head: [['Nom de la Salle', 'Élèves Standards', 'Tiers-Temps', 'Total Salle']],
+        body: tableBody,
+        theme: 'grid',
+        headStyles: { fillColor: [44, 62, 80], halign: 'center' },
+        columnStyles: {
+            1: { halign: 'center' },
+            2: { halign: 'center' },
+            3: { halign: 'center', fontStyle: 'bold' }
+        },
+        foot: [[
+            'TOTAL GÉNÉRAL', 
+            '', 
+            '', 
+            totalGlobal
+        ]],
+        footStyles: { fillColor: [231, 76, 60], halign: 'center' }
+    });
+
+    // Pied de page
+    const finalY = doc.lastAutoTable.finalY + 15;
+    doc.setFontSize(10);
+    doc.text(`Document généré le ${new Date().toLocaleDateString()}`, 14, finalY);
+
+    doc.save("Recapitulatif_Salles_DNB.pdf");
+}
 
 /**
  * Ouvre le menu de sélection pour l'anonymat avec un design moderne
@@ -6659,16 +6912,24 @@ window.renderPlanning = function() {
         table.className = 'planning-matrix';
         const tbody = document.createElement('tbody');
 
-        let activeRooms = DB.rooms.filter(r => (DB.distribution[r.nom] || []).length > 0);
+        let activeRooms = DB.rooms.filter(r => r.isSpecial || (DB.distribution[r.nom] || []).length > 0);
         
-        // Tri des salles
-        activeRooms.sort((a, b) => {
-            const isSpecialA = (a.isTT === true || a.isTT === 'true' || a.isAmen === true || a.isAmen === 'true');
-            const isSpecialB = (b.isTT === true || b.isTT === 'true' || b.isAmen === true || b.isAmen === 'true');
-            if (isSpecialA && !isSpecialB) return -1;
-            if (!isSpecialA && isSpecialB) return 1;
-            return a.nom.localeCompare(b.nom);
-        });
+        // Tri des salles (Modifié pour mettre les lieux spéciaux en bas)
+activeRooms.sort((a, b) => {
+    // 1. Les lieux spéciaux (Couloirs, Réserves...) vont tout en bas
+    if (a.isSpecial && !b.isSpecial) return 1;
+    if (!a.isSpecial && b.isSpecial) return -1;
+
+    // 2. Les salles TT / Aménagées remontent en haut
+    const isRoomTTAmenA = (a.isTT === true || a.isTT === 'true' || a.isAmen === true || a.isAmen === 'true');
+    const isRoomTTAmenB = (b.isTT === true || b.isTT === 'true' || b.isAmen === true || b.isAmen === 'true');
+
+    if (isRoomTTAmenA && !isRoomTTAmenB) return -1;
+    if (!isRoomTTAmenA && isRoomTTAmenB) return 1;
+    
+    // 3. Tri alphabétique pour le reste
+    return a.nom.localeCompare(b.nom);
+});
 
         activeRooms.forEach(room => {
             const tr = document.createElement('tr');
@@ -7139,7 +7400,13 @@ window.exportPlanning = function() {
         }
 
         const totalWidthAvailable = 240; 
-        let colsData = gridCols.map((c, i) => ({ idx: i, dur: window.toMin(c.end) - window.toMin(c.start), label: `${c.start}` }));
+        
+        let colsData = gridCols.map((c, i) => ({ 
+            idx: i, 
+            dur: window.toMin(c.end) - window.toMin(c.start), 
+            label: `${c.start} - ${c.end}` 
+        }));
+        
         const totalDuration = colsData.reduce((acc, c) => acc + c.dur, 0);
         colsData.forEach(c => { c.rawWidth = (c.dur / totalDuration) * totalWidthAvailable; });
 
@@ -7165,22 +7432,38 @@ window.exportPlanning = function() {
             pdfColStyles[c.idx + 1] = { cellWidth: c.finalWidth, halign:'center' };
         });
 
-        // Données
-        let activeRooms = DB.rooms.filter(r => (DB.distribution[r.nom] || []).length > 0);
+        // --- DÉBUT DE LA LOGIQUE CORRIGÉE ---
+        let activeRooms = DB.rooms.filter(r => r.isSpecial || (DB.distribution[r.nom] || []).length > 0);
+        
         activeRooms.sort((a, b) => {
-            const isSpecialA = (a.isTT === true || a.isTT === 'true' || a.isAmen === true || a.isAmen === 'true');
-            const isSpecialB = (b.isTT === true || b.isTT === 'true' || b.isAmen === true || b.isAmen === 'true');
-            if (isSpecialA && !isSpecialB) return -1;
-            if (!isSpecialA && isSpecialB) return 1;
+            // 1. Les lieux spéciaux (Couloirs, Réserves...) vont TOUJOURS tout en bas
+            if (a.isSpecial && !b.isSpecial) return 1;
+            if (!a.isSpecial && b.isSpecial) return -1;
+
+            // 2. Les salles TT / Aménagées remontent en haut
+            const isRoomTTAmenA = (a.isTT === true || a.isTT === 'true' || a.isAmen === true || a.isAmen === 'true');
+            const isRoomTTAmenB = (b.isTT === true || b.isTT === 'true' || b.isAmen === true || b.isAmen === 'true');
+
+            if (isRoomTTAmenA && !isRoomTTAmenB) return -1;
+            if (!isRoomTTAmenA && isRoomTTAmenB) return 1;
+            
+            // 3. Tri alphabétique pour le reste
             return a.nom.localeCompare(b.nom);
         });
+        // --- FIN DE LA LOGIQUE CORRIGÉE ---
 
         let body = [];
         activeRooms.forEach(room => {
             let row = {};
+            // On s'assure que le (TT) ne s'affiche pas pour un lieu spécial, pour garder un affichage propre
             const isRTt = (room.isTT === true || room.isTT === 'true');
             const isRAmen = (room.isAmen === true || room.isAmen === 'true');
-            row['room'] = `${room.nom}\n${isRTt?'(TT)':''}${isRAmen?'(Amén.)':''}`;
+            
+            let roomLabel = room.nom;
+            if (!room.isSpecial) {
+                roomLabel += `\n${isRTt?'(TT)':''}${isRAmen?'(Amén.)':''}`;
+            }
+            row['room'] = roomLabel;
 
             const roomSlots = isRTt ? slotsTT : slotsStd;
             const roomType = isRTt ? 'tt' : 'std';
@@ -7209,9 +7492,7 @@ window.exportPlanning = function() {
                         const planKey = `${examIdx}_${room.nom}_${roomType}_${slotIdx}_${i}`;
                         if(DB.planning[planKey]) survs.push(DB.planning[planKey]);
                     }
-                    // --- MODIFICATION ICI : SAUT DE LIGNE POUR PDF ---
                     cellContent += survs.length > 0 ? survs.join('\n') : "(Vide)";
-                    // -------------------------------------------------
 
                     row[key] = { 
                         content: cellContent, 
