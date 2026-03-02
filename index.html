@@ -7370,28 +7370,44 @@ function renderProfPlanningMatrix(container) {
     container.innerHTML = html;
 }
 
-// --- 3. EXPORT PDF PLANNING (Noms l'un sous l'autre) ---
+// --- 3. EXPORT PDF PLANNING (Code complet et corrigé) ---
 window.exportPlanning = function() {
     const { jsPDF } = window.jspdf;
+    // Orientation Paysage ('l'), Unité mm, Format A4
     const doc = new jsPDF('l', 'mm', 'a4'); 
-    const nbSurv = DB.config.nbSurv || 1;
+    const globalNbSurv = DB.config.nbSurv || 1;
     let pageAdded = false;
+
+    if (!DB.exams || DB.exams.length === 0) {
+        alert("Aucun examen à exporter.");
+        return;
+    }
 
     DB.exams.forEach((exam, examIdx) => {
         if (pageAdded) doc.addPage();
         pageAdded = true;
 
-        addSmartLogo(doc, 10, 10, 45);
-        doc.setFontSize(16); doc.setTextColor(44, 62, 80);
+        // Logo et En-tête
+        if (typeof addSmartLogo === 'function') {
+            addSmartLogo(doc, 10, 10, 45);
+        }
+        
+        doc.setFontSize(16); 
+        doc.setTextColor(44, 62, 80);
         doc.text("PLANNING DES SURVEILLANCES", 148, 15, {align:'center'});
-        doc.setFontSize(12); doc.setTextColor(0);
+        
+        doc.setFontSize(12); 
+        doc.setTextColor(0);
         doc.text(`${exam.name} (${exam.date})`, 148, 22, {align:'center'});
 
-        // Grille & Largeurs (Smart Width)
+        // Construction de la grille temporelle
         const slotsStd = window.getComputedSlots(exam, 'std');
         const slotsTT = window.getComputedSlots(exam, 'tt');
         const allPoints = new Set();
-        [...slotsStd, ...slotsTT].forEach(s => { allPoints.add(s.start); allPoints.add(s.end); });
+        [...slotsStd, ...slotsTT].forEach(s => { 
+            allPoints.add(s.start); 
+            allPoints.add(s.end); 
+        });
         const sortedPoints = Array.from(allPoints).sort((a,b) => window.toMin(a) - window.toMin(b));
 
         const gridCols = [];
@@ -7399,8 +7415,8 @@ window.exportPlanning = function() {
             gridCols.push({ start: sortedPoints[i], end: sortedPoints[i+1] });
         }
 
+        // Calcul des largeurs de colonnes
         const totalWidthAvailable = 240; 
-        
         let colsData = gridCols.map((c, i) => ({ 
             idx: i, 
             dur: window.toMin(c.end) - window.toMin(c.start), 
@@ -7413,55 +7429,55 @@ window.exportPlanning = function() {
         const MIN_WIDTH = 25; 
         let usedWidth = 0;
         colsData.forEach(c => {
-            if(c.rawWidth < MIN_WIDTH) c.finalWidth = MIN_WIDTH; else c.finalWidth = c.rawWidth; 
+            c.finalWidth = Math.max(c.rawWidth, MIN_WIDTH);
             usedWidth += c.finalWidth;
         });
 
+        // Ajustement si débordement
         if(usedWidth > totalWidthAvailable) {
             const overflow = usedWidth - totalWidthAvailable;
             const largeCols = colsData.filter(c => c.finalWidth > MIN_WIDTH);
             const totalLargeWidth = largeCols.reduce((acc, c) => acc + c.finalWidth, 0);
-            largeCols.forEach(c => { c.finalWidth -= (overflow * (c.finalWidth / totalLargeWidth)); });
+            largeCols.forEach(c => { 
+                c.finalWidth -= (overflow * (c.finalWidth / totalLargeWidth)); 
+            });
         }
 
+        // Définition des colonnes pour autoTable
         let pdfColumns = [{header: 'Salle', dataKey: 'room'}];
         let pdfColStyles = { 0: { cellWidth: 35, fontStyle: 'bold', fillColor: [240, 240, 240] } };
-        colsData.forEach(c => {
+        
+        colsData.forEach((c, i) => {
             const key = `col_${c.idx}`;
             pdfColumns.push({ header: c.label, dataKey: key });
-            pdfColStyles[c.idx + 1] = { cellWidth: c.finalWidth, halign:'center' };
+            pdfColStyles[i + 1] = { cellWidth: c.finalWidth, halign:'center' };
         });
 
-        // --- DÉBUT DE LA LOGIQUE CORRIGÉE ---
+        // Filtrage et tri des salles (Idem vue écran)
         let activeRooms = DB.rooms.filter(r => r.isSpecial || (DB.distribution[r.nom] || []).length > 0);
         
         activeRooms.sort((a, b) => {
-            // 1. Les lieux spéciaux (Couloirs, Réserves...) vont TOUJOURS tout en bas
             if (a.isSpecial && !b.isSpecial) return 1;
             if (!a.isSpecial && b.isSpecial) return -1;
-
-            // 2. Les salles TT / Aménagées remontent en haut
-            const isRoomTTAmenA = (a.isTT === true || a.isTT === 'true' || a.isAmen === true || a.isAmen === 'true');
-            const isRoomTTAmenB = (b.isTT === true || b.isTT === 'true' || b.isAmen === true || b.isAmen === 'true');
-
+            const isRoomTTAmenA = (a.isTT || a.isAmen);
+            const isRoomTTAmenB = (b.isTT || b.isAmen);
             if (isRoomTTAmenA && !isRoomTTAmenB) return -1;
             if (!isRoomTTAmenA && isRoomTTAmenB) return 1;
-            
-            // 3. Tri alphabétique pour le reste
             return a.nom.localeCompare(b.nom);
         });
-        // --- FIN DE LA LOGIQUE CORRIGÉE ---
 
+        // Construction du corps du tableau
         let body = [];
         activeRooms.forEach(room => {
             let row = {};
-            // On s'assure que le (TT) ne s'affiche pas pour un lieu spécial, pour garder un affichage propre
             const isRTt = (room.isTT === true || room.isTT === 'true');
             const isRAmen = (room.isAmen === true || room.isAmen === 'true');
             
             let roomLabel = room.nom;
             if (!room.isSpecial) {
-                roomLabel += `\n${isRTt?'(TT)':''}${isRAmen?'(Amén.)':''}`;
+                if(isRTt || isRAmen) {
+                    roomLabel += `\n(${isRTt?'TT':''}${isRTt && isRAmen?'/':''}${isRAmen?'Amén.':''})`;
+                }
             }
             row['room'] = roomLabel;
 
@@ -7478,6 +7494,7 @@ window.exportPlanning = function() {
                 const activeSlot = roomSlots.find(rs => (window.toMin(rs.start) <= colStart && window.toMin(rs.end) >= colEnd));
 
                 if(activeSlot) {
+                    // Gestion du ColSpan (fusion de cellules)
                     let span = 1;
                     const slotEndVal = window.toMin(activeSlot.end);
                     for(let k = colIdx + 1; k < gridCols.length; k++) {
@@ -7486,41 +7503,62 @@ window.exportPlanning = function() {
                     }
 
                     const slotIdx = activeSlot.originalIdx !== undefined ? activeSlot.originalIdx : 0;
-                    let cellContent = `${activeSlot.start}-${activeSlot.end}\n`;
+                    
+                    // --- CORRECTION MAJEURE : RÉCUPÉRATION DE TOUS LES SURVEILLANTS ---
                     let survs = [];
-                    for(let i=0; i<nbSurv; i++) {
+                    // On utilise le nombre de surveillants spécifique à la salle, sinon le global
+                    const limit = room.nbSurv || globalNbSurv;
+                    
+                    for(let i = 0; i < limit; i++) {
                         const planKey = `${examIdx}_${room.nom}_${roomType}_${slotIdx}_${i}`;
-                        if(DB.planning[planKey]) survs.push(DB.planning[planKey]);
+                        if(DB.planning[planKey]) {
+                            survs.push(DB.planning[planKey]);
+                        }
                     }
+
+                    // On construit le contenu de la cellule
+                    let cellContent = `${activeSlot.start} - ${activeSlot.end}\n`;
                     cellContent += survs.length > 0 ? survs.join('\n') : "(Vide)";
 
                     row[key] = { 
                         content: cellContent, 
                         colSpan: span,
-                        styles: { fillColor: [255, 255, 255], valign: 'middle' }
+                        styles: { fillColor: [255, 255, 255], valign: 'middle', halign: 'center' }
                     };
                     if(span > 1) skipCols = span - 1;
                 } else {
-                    row[key] = { content: "-", styles: { fillColor: [245, 245, 245], textColor: [220,220,220] } };
+                    row[key] = { content: "-", styles: { fillColor: [245, 245, 245], textColor: [200,200,200], halign: 'center' } };
                 }
             });
             body.push(row);
         });
 
+        // Génération du tableau dans le PDF
         doc.autoTable({
             columns: pdfColumns,
             body: body,
             startY: 30,
             theme: 'grid',
-            styles: { fontSize: 8, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: 0.1 },
-            headStyles: { fillColor: [44, 62, 80], fontSize: 9, halign: 'center' },
-            columnStyles: pdfColStyles
+            styles: { 
+                fontSize: 8, 
+                cellPadding: 2, 
+                lineColor: [180, 180, 180], 
+                lineWidth: 0.1,
+                overflow: 'linebreak' // Important pour que les noms passent à la ligne
+            },
+            headStyles: { fillColor: [44, 62, 80], fontSize: 9, halign: 'center', textColor: [255,255,255] },
+            columnStyles: pdfColStyles,
+            margin: { left: 10, right: 10 }
         });
         
-        doc.setFontSize(8); doc.setTextColor(150);
-        doc.text(`Généré le ${new Date().toLocaleDateString()}`, 10, 200);
+        // Pied de page
+        doc.setFontSize(8); 
+        doc.setTextColor(150);
+        const dateStr = new Date().toLocaleDateString('fr-FR');
+        doc.text(`Généré le ${dateStr} - Page ${examIdx + 1}`, 10, 200);
     });
-    doc.save("Planning_Surveillances.pdf");
+
+    doc.save(`Planning_Surveillances_${new Date().getTime()}.pdf`);
 };
 
 window.exportRoomPlanningPDF = function() {
