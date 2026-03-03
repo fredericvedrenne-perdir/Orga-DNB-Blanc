@@ -3234,6 +3234,18 @@ window.deleteTeacher = function(index) {
         console.log(`🧹 Nettoyage : ${removedCount} élève(s) supprimé(s) de la répartition.`);
     }
 
+    // --- 1.5 RÉHYDRATATION DES RÉFÉRENCES (SINGLE SOURCE OF TRUTH) ---
+    // But : Rafraîchir les élèves répartis avec leurs données à jour (aménagements, classe, etc.)
+    // Indispensable lors du rechargement de la page pour ne pas afficher des objets obsolètes
+    Object.keys(DB.distribution).forEach(roomName => {
+        DB.distribution[roomName] = DB.distribution[roomName].map(distStudent => {
+            // On récupère la référence "vivante" depuis la base principale
+            const liveStudent = DB.students.find(s => s.nom === distStudent.nom && s.prenom === distStudent.prenom);
+            // On retourne la référence fraîche ou on garde l'ancienne par défaut
+            return liveStudent || distStudent;
+        });
+    });
+
     // --- 2. BLOC D'AUTO-CORRECTION : RÉCUPÉRATION DES ORPHELINS ---
     // But : Trouver les élèves de DB.students qui n'ont pas encore de salle
     if(!DB.distribution["Zone Tampon"]) DB.distribution["Zone Tampon"] = [];
