@@ -2948,14 +2948,16 @@ window.exportRelevesNotes = function(sortMode, targetId) {
 };
 
     // --- FONCTION D'AFFICHAGE AVEC FILTRES ET MEF ---
+/**
+ * Affiche la liste des élèves avec support de l'édition en ligne au clic sur la ligne
+ */
 window.renderStudents = function() { 
     const l = DB.uiState.locked.students; 
     const table = document.getElementById('tableStudents');
     
     if(!table) return;
 
-    // 1. On réécrit l'EN-TÊTE pour inclure les CHAMPS DE FILTRE
-    // Note : On ajoute des 'input' dans une deuxième ligne d'en-tête
+    // 1. EN-TÊTE (Conservé tel quel pour les filtres)
     let theadHtml = `
         <thead>
             <tr>
@@ -2963,7 +2965,8 @@ window.renderStudents = function() {
                 <th style="width:20%">Prénom</th>
                 <th style="width:50px">Sexe</th>
                 <th style="width:10%">Classe</th>
-                <th style="width:15%">MEF</th> <th>Anonymat</th>
+                <th style="width:15%">MEF</th> 
+                <th>Anonymat</th>
                 <th>Aménagements</th> 
                 <th style="width:50px; text-align:center">TT</th> 
                 <th style="width:50px">Act.</th> 
@@ -2973,14 +2976,15 @@ window.renderStudents = function() {
                 <th><input type="text" class="filter-input" placeholder="Filtrer..." onkeyup="filterStudentsTable(1)"></th>
                 <th></th>
                 <th><input type="text" class="filter-input" placeholder="Filtrer..." onkeyup="filterStudentsTable(3)"></th>
-                <th><input type="text" class="filter-input" placeholder="Filtrer..." onkeyup="filterStudentsTable(4)"></th> <th><input type="text" class="filter-input" placeholder="Code..." onkeyup="filterStudentsTable(5)"></th>
+                <th><input type="text" class="filter-input" placeholder="Filtrer..." onkeyup="filterStudentsTable(4)"></th> 
+                <th><input type="text" class="filter-input" placeholder="Code..." onkeyup="filterStudentsTable(5)"></th>
                 <th></th>
                 <th></th>
                 <th></th>
             </tr>
         </thead>`;
     
-    // 2. On génère le CORPS du tableau
+    // 2. CORPS du tableau
     let tbodyHtml = '<tbody>';
     
     DB.students.forEach((s, i) => {
@@ -2991,32 +2995,79 @@ window.renderStudents = function() {
             s.labels.forEach(labCode => {
                 const def = DB.config.labels.find(d => d.code === labCode);
                 const col = def ? def.color : '#999';
-                labelsHtml += `<span class="badge" style="background-color:${col}; margin-right:3px;">${labCode}</span>`;
+                labelsHtml += `<span class="badge" style="background-color:${col}; margin-right:3px; color:white; padding:2px 5px; border-radius:4px; font-size:0.75rem;">${labCode}</span>`;
             });
         }
 
+        // On ajoute un ID à la ligne et un curseur pointeur pour indiquer que c'est cliquable
         tbodyHtml += `
-        <tr>
+        <tr id="row-student-${i}" onclick="enterEditMode(${i})" style="cursor:pointer" title="Cliquer pour éditer">
             <td style="font-weight:bold;">${s.nom}</td>
             <td>${s.prenom}</td>
             <td>${s.sexe}</td>
-            <td><span class="badge bg-secondary" style="background:#6c757d; color:white;">${s.classe}</span></td>
-            <td style="color:#2980b9; font-size:0.9rem;">${s.mef || "-"}</td> <td>${codeDisplay}</td>
+            <td><span class="badge" style="background:#6c757d; color:white; padding:3px 7px; border-radius:4px;">${s.classe}</span></td>
+            <td style="color:#2980b9; font-size:0.9rem;">${s.mef || "-"}</td> 
+            <td>${codeDisplay}</td>
             <td>${labelsHtml}</td> 
-            <td style="text-align:center">
+            <td style="text-align:center" onclick="event.stopPropagation()">
                 <input type="checkbox" ${s.tt?'checked':''} ${l?'disabled':''} onchange="toggleStudentTT(${i}, this.checked)">
             </td>
-            <td style="text-align:center">${!l?`<button class="btn btn-danger btn-sm" onclick="DB.students.splice(${i},1);renderStudents()">X</button>`:''}</td>
+            <td style="text-align:center" onclick="event.stopPropagation()">
+                ${!l?`<button class="btn btn-danger btn-sm" onclick="DB.students.splice(${i},1);renderStudents()">X</button>`:''}
+            </td>
         </tr>`;
     });
     
     tbodyHtml += '</tbody>';
-    
-    // Mise à jour complète du tableau
     table.innerHTML = theadHtml + tbodyHtml;
-	
-	// Dans processExcelData (partie students) ou à la fin de renderStudents :
-updateMefCheckboxes();
+
+    if (typeof updateMefCheckboxes === "function") updateMefCheckboxes();
+};
+
+/**
+ * Transforme la ligne en mode édition (Inputs)
+ */
+window.enterEditMode = function(i) {
+    if (DB.uiState.locked.students) return; // Pas d'édition si verrouillé
+    
+    const s = DB.students[i];
+    const tr = document.getElementById(`row-student-${i}`);
+    if (!tr || tr.dataset.editing === "true") return;
+
+    tr.dataset.editing = "true";
+    tr.onclick = null; // Désactive le clic d'édition pendant qu'on édite
+    tr.style.background = "#fff9db"; // Couleur d'alerte édition
+
+    tr.innerHTML = `
+        <td><input type="text" class="form-control form-control-sm" id="edit-nom-${i}" value="${s.nom}" style="width:100%; font-weight:bold;"></td>
+        <td><input type="text" class="form-control form-control-sm" id="edit-prenom-${i}" value="${s.prenom}" style="width:100%;"></td>
+        <td><input type="text" class="form-control form-control-sm" id="edit-sexe-${i}" value="${s.sexe || ''}" style="width:40px;"></td>
+        <td><input type="text" class="form-control form-control-sm" id="edit-classe-${i}" value="${s.classe}" style="width:80px;"></td>
+        <td><input type="text" class="form-control form-control-sm" id="edit-mef-${i}" value="${s.mef || ''}" style="width:100%;"></td>
+        <td><input type="text" class="form-control form-control-sm" id="edit-anon-${i}" value="${s.anonymat || ''}" style="width:100%;"></td>
+        <td><small>Modifiez via les tags</small></td>
+        <td style="text-align:center"><input type="checkbox" ${s.tt?'checked':''} disabled></td>
+        <td style="text-align:center">
+            <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); saveStudent(${i})">💾</button>
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); renderStudents()">❌</button>
+        </td>
+    `;
+};
+
+/**
+ * Sauvegarde les données saisies
+ */
+window.saveStudent = function(i) {
+    DB.students[i].nom = document.getElementById(`edit-nom-${i}`).value.toUpperCase();
+    DB.students[i].prenom = document.getElementById(`edit-prenom-${i}`).value;
+    DB.students[i].sexe = document.getElementById(`edit-sexe-${i}`).value.toUpperCase();
+    DB.students[i].classe = document.getElementById(`edit-classe-${i}`).value.toUpperCase();
+    DB.students[i].mef = document.getElementById(`edit-mef-${i}`).value;
+    DB.students[i].anonymat = document.getElementById(`edit-anon-${i}`).value;
+
+    if(window.syncDistributionData) syncDistributionData();
+    if(window.saveProject) saveProject();
+    renderStudents();
 };
 
 // --- NOUVELLE FONCTION POUR GÉRER LES FILTRES ---
@@ -3277,6 +3328,43 @@ window.deleteTeacher = function(index) {
         const list = DB.distribution[room.nom];
         let card = createRoomCard(room.nom, list, room, false);
         container.appendChild(card);
+    });
+};
+
+/**
+ * Synchronise DB.distribution avec DB.students
+ * Pourquoi : Sécurise les données avant toute opération d'export ou d'affichage.
+ * Cette fonction est la "Source Unique de Vérité".
+ */
+window.syncDistributionData = function() {
+    if (!DB.distribution || !DB.students) return;
+
+    const validStudentKeys = new Set(DB.students.map(s => `${s.nom}_${s.prenom}`));
+    
+    // 1. Mise à jour des données et suppression des fantômes
+    Object.keys(DB.distribution).forEach(roomName => {
+        DB.distribution[roomName] = DB.distribution[roomName]
+            .filter(s => validStudentKeys.has(`${s.nom}_${s.prenom}`)) // Supprime si n'existe plus
+            .map(distStudent => {
+                // Récupère la version fraîche (avec nouveaux aménagements/salles)
+                return DB.students.find(s => s.nom === distStudent.nom && s.prenom === distStudent.prenom) || distStudent;
+            });
+    });
+
+    // 2. Gestion des orphelins (élèves non placés)
+    if (!DB.distribution["Zone Tampon"]) DB.distribution["Zone Tampon"] = [];
+    const placedKeys = new Set();
+    Object.keys(DB.distribution).forEach(roomName => {
+        DB.distribution[roomName].forEach(s => placedKeys.add(`${s.nom}_${s.prenom}`));
+    });
+
+    DB.students.forEach(student => {
+        if (!placedKeys.has(`${student.nom}_${student.prenom}`)) {
+            // Éviter les doublons dans la zone tampon
+            if(!DB.distribution["Zone Tampon"].find(s => s.nom === student.nom && s.prenom === student.prenom)) {
+                DB.distribution["Zone Tampon"].push(student);
+            }
+        }
     });
 };
 
@@ -3751,7 +3839,8 @@ function exportSignPDF() {
 // === EXPORT CONVOCATIONS ÉLÈVES (MISE À JOUR) ===
 // =========================================================
 window.exportConvocationStudents = function(targetId = null) {
-    const txtArea = document.getElementById('txtConvocInfo');
+    syncDistributionData();
+	const txtArea = document.getElementById('txtConvocInfo');
     if(txtArea) txtArea.style.height = "250px";
     
     if(!confirm("🖨️ IMPORTANT : MODE RECTO-VERSO\n\nCertaines convocations contiennent beaucoup de texte et seront générées sur 2 pages.\n\n👉 Veuillez régler votre imprimante sur RECTO-VERSO (bords longs).")) return;
@@ -4221,41 +4310,115 @@ window.generateAnonymityCodes = function() {
 };
 
 /**
- * Moteur de calcul avec logique DNBXX-YY-ZZZ pour le mode Standard
+ * Interface de sélection du mode d'anonymat
  */
-window.runAnonymityEngine = function(mode) {
+window.generateAnonymityCodes = function() {
+    if (!DB.students || DB.students.length === 0) return alert("Aucun élève dans la base.");
+
+    const overlay = document.createElement('div');
+    overlay.className = "modal-overlay-custom";
+    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(4px);";
+    
+    overlay.innerHTML = `
+        <div style="background:white; border-radius:16px; width:480px; overflow:hidden; box-shadow:0 25px 50px rgba(0,0,0,0.4); font-family:'Segoe UI', sans-serif;">
+            <div style="background:#2c3e50; color:white; padding:25px; text-align:center;">
+                <div style="font-size:2.5rem; margin-bottom:10px;">🎲</div>
+                <h3 style="margin:0; font-size:1.3rem; color:white !important;">Générateur d'Anonymat</h3>
+                <p style="margin:5px 0 0; font-size:0.85rem; opacity:0.8;">Choisissez le format de codification</p>
+            </div>
+            <div id="anonymity-content" style="padding:25px; display:flex; flex-direction:column; gap:12px; background:#f8f9fa;">
+                <div onclick="prepareAnonymity('std')" class="anon-opt" style="display:flex; align-items:center; padding:15px; background:white; border:2px solid #e0e0e0; border-radius:12px; cursor:pointer;">
+                    <div style="font-size:1.8rem; margin-right:15px;">🇫🇷</div>
+                    <div style="flex:1;"><b style="color:#2c3e50;">Format Officiel (DNBXX-YY-ZZZ)</b></div>
+                </div>
+                <div onclick="prepareAnonymity('num')" class="anon-opt" style="display:flex; align-items:center; padding:15px; background:white; border:2px solid #e0e0e0; border-radius:12px; cursor:pointer;">
+                    <div style="font-size:1.8rem; margin-right:15px;">🔢</div>
+                    <div style="flex:1;"><b style="color:#2c3e50;">Numérique Aléatoire (6 chiffres)</b></div>
+                </div>
+                <div onclick="prepareAnonymity('alpha')" class="anon-opt" style="display:flex; align-items:center; padding:15px; background:white; border:2px solid #e0e0e0; border-radius:12px; cursor:pointer;">
+                    <div style="font-size:1.8rem; margin-right:15px;">🔠</div>
+                    <div style="flex:1;"><b style="color:#2c3e50;">Alphanumérique (6 caractères)</b></div>
+                </div>
+                <button class="btn btn-secondary" style="margin-top:10px;" onclick="this.closest('.modal-overlay-custom').remove()">Annuler</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+};
+
+/**
+ * Vérifie l'existant avant de lancer le moteur
+ */
+window.prepareAnonymity = function(mode) {
+    const studentsWithCode = DB.students.filter(s => s.anonymat && s.anonymat.trim() !== "");
+    
+    if (studentsWithCode.length === 0) {
+        runAnonymityEngine(mode, 'all');
+        return;
+    }
+
+    // Si codes existants, on change le contenu de la modale
+    const content = document.getElementById('anonymity-content');
+    content.innerHTML = `
+        <div style="text-align:center; margin-bottom:15px;">
+            <p style="color:#e67e22; font-weight:bold;">⚠️ ${studentsWithCode.length} codes déjà attribués.</p>
+            <p style="font-size:0.9rem; color:#7f8c8d;">Que souhaitez-vous faire ?</p>
+        </div>
+        <button class="btn btn-primary" style="padding:12px; background:#27ae60; border:none;" onclick="runAnonymityEngine('${mode}', 'missing')">
+            Générer uniquement les manquants
+        </button>
+        <button class="btn btn-danger" style="padding:12px; background:#e74c3c; border:none;" onclick="if(confirm('Tout effacer ?')) runAnonymityEngine('${mode}', 'all')">
+            Tout régénérer (Écraser l'existant)
+        </button>
+        <button class="btn btn-secondary" style="padding:10px;" onclick="document.querySelector('.modal-overlay-custom').remove()">
+            Annuler la démarche
+        </button>
+    `;
+};
+
+/**
+ * Moteur de calcul final
+ */
+window.runAnonymityEngine = function(mode, scope) {
     const year = (DB.config && DB.config.year) ? DB.config.year.toString().slice(-2) : new Date().getFullYear().toString().slice(-2);
-    const usedGlobalCodes = new Set();
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const usedGlobalCodes = new Set();
+    const usedRandomsPerClass = {};
 
-    // Préparation pour le mode Standard
-    let classMap = {};
-    const usedRandomsPerClass = {}; 
+    // 1. Initialisation des Sets (pour éviter les doublons avec l'existant)
+    const uniqueClasses = [...new Set(DB.students.map(s => s.classe || "SANS-CLASSE"))].sort();
+    uniqueClasses.forEach((c, i) => {
+        const yy = (i + 1).toString().padStart(2, '0');
+        usedRandomsPerClass[yy] = new Set();
+    });
 
-    if (mode === 'std') {
-        // On récupère les classes uniques et on les trie
-        const uniqueClasses = [...new Set(DB.students.map(s => s.classe || "SANS-CLASSE"))].sort();
-        uniqueClasses.forEach((c, i) => {
-            classMap[c] = (i + 1).toString().padStart(2, '0'); // YY
-            usedRandomsPerClass[classMap[c]] = new Set();
+    if (scope === 'missing') {
+        DB.students.forEach(s => {
+            if (s.anonymat) {
+                usedGlobalCodes.add(s.anonymat);
+                if (mode === 'std' && s.anonymat.includes('-')) {
+                    const parts = s.anonymat.split('-');
+                    if (parts[2]) usedRandomsPerClass[parts[1]]?.add(parts[2]);
+                }
+            }
         });
     }
 
-    DB.students.forEach((s, index) => {
-        let code = "";
-        let isUnique = false;
-        let attempts = 0;
+    let classMap = {};
+    uniqueClasses.forEach((c, i) => classMap[c] = (i + 1).toString().padStart(2, '0'));
 
-        while (!isUnique && attempts < 5000) {
+    // 2. Boucle de génération
+    let count = 0;
+    DB.students.forEach(s => {
+        if (scope === 'missing' && s.anonymat) return;
+
+        let code = "", isUnique = false, attempts = 0;
+        while (!isUnique && attempts < 3000) {
             if (mode === 'std') {
                 const yy = classMap[s.classe || "SANS-CLASSE"];
-                const val = Math.floor(Math.random() * 999) + 1; // ZZZ entre 001 et 999
-                const zzz = val.toString().padStart(3, '0');
-                
-                // Vérification unicité ZZZ dans la classe YY
-                if (!usedRandomsPerClass[yy].has(zzz)) {
-                    // AJOUT DU PRÉFIXE DNB ICI
-                    code = `DNB${year}-${yy}-${zzz}`;
+                const zzz = (Math.floor(Math.random() * 999) + 1).toString().padStart(3, '0');
+                code = `DNB${year}-${yy}-${zzz}`;
+                if (!usedRandomsPerClass[yy].has(zzz) && !usedGlobalCodes.has(code)) {
                     usedRandomsPerClass[yy].add(zzz);
                     isUnique = true;
                 }
@@ -4263,28 +4426,23 @@ window.runAnonymityEngine = function(mode) {
                 code = Math.floor(100000 + Math.random() * 900000).toString();
                 if (!usedGlobalCodes.has(code)) isUnique = true;
             } else if (mode === 'alpha') {
-                code = "";
-                for (let i = 0; i < 6; i++) {
-                    code += chars.charAt(Math.floor(Math.random() * chars.length));
-                }
+                code = Array.from({length:6}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
                 if (!usedGlobalCodes.has(code)) isUnique = true;
             }
             attempts++;
         }
-        
-        usedGlobalCodes.add(code);
         s.anonymat = code;
+        usedGlobalCodes.add(code);
+        count++;
     });
 
-    // Nettoyage et rafraîchissement
+    // 3. Nettoyage et Sortie
     const overlay = document.querySelector('.modal-overlay-custom');
     if (overlay) overlay.remove();
     
-    if (typeof saveToLocalStorage === "function") saveToLocalStorage();
+    if (typeof saveProject === "function") saveProject();
     if (typeof renderStudents === "function") renderStudents();
-    if (typeof renderRooms === "function") renderRooms();
-    
-    alert("Génération terminée : " + DB.students.length + " élèves mis à jour.");
+    alert(`Succès : ${count} codes traités.`);
 };
 
 // 2. Export Liste Secrétariat (VERSION VISUELLE MODERNE)
