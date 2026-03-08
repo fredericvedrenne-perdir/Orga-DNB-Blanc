@@ -5849,22 +5849,40 @@ window.triggerPdfExport = function() {
 };
 
 /**
- * [DEV IA] Moteur de génération PDF (Mis à jour)
- * @param {string} footerText - Le texte à afficher en bas de page
+ * [DEV IA] Moteur de génération PDF avec tri par Classe/Nom/Prénom
+ * @param {string} footerText - Le texte personnalisé en bas de page
  */
 window.exportSimulationPDF = function(footerText) {
-    if (DB.students.length === 0) return alert("Aucun élève dans la base.");
+    // --- 0. SYNCHRONISATION ET SÉCURITÉ ---
+    if (window.syncDistributionData) window.syncDistributionData();
+    if (!DB.students || DB.students.length === 0) return alert("Aucun élève dans la base.");
     
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     let count = 0;
-    const students = [...DB.students].sort((a,b) => a.nom.localeCompare(b.nom));
 
-    students.forEach(s => {
+    // --- 1. TRI MULTI-CRITÈRES (CLASSE > NOM > PRÉNOM) ---
+    // Pourquoi : Permet de regrouper les relevés par classe pour une distribution physique facilitée.
+    const sortedStudents = [...DB.students].sort((a, b) => {
+        // a) Comparaison des classes
+        const cmpClasse = (a.classe || "").localeCompare(b.classe || "");
+        if (cmpClasse !== 0) return cmpClasse;
+
+        // b) Si même classe, comparaison des noms
+        const cmpNom = (a.nom || "").localeCompare(b.nom || "");
+        if (cmpNom !== 0) return cmpNom;
+
+        // c) Si même nom, comparaison des prénoms
+        return (a.prenom || "").localeCompare(b.prenom || "");
+    });
+
+    // --- 2. GÉNÉRATION DES PAGES ---
+    sortedStudents.forEach(s => {
         const g = s.grades || {};
 
-        // --- CALCULS (Identiques) ---
-        const nHG = getNoteHGEMC(s) !== null ? getNoteHGEMC(s) : 0;
+        // --- CALCULS DES COMPOSANTES ---
+        const nHG = (typeof getNoteHGEMC === 'function' && getNoteHGEMC(s) !== null) ? getNoteHGEMC(s) : 0;
+        
         let sumSc = 0, nbSc = 0;
         let detailSci = [];
         if (g.svt != null) { sumSc += parseFloat(g.svt); nbSc++; detailSci.push(`SVT: ${g.svt}`); }
@@ -5876,6 +5894,8 @@ window.exportSimulationPDF = function(footerText) {
         const nMath = parseFloat(g.math) || 0;
         const nOral = parseFloat(g.oral) || 0;
         const moyGen = parseFloat(g.genAvg) || 0;
+        
+        // Pondération : 60% Épreuves finales, 40% Moyenne Annuelle (Moyenne Générale)
         const moyEpreuves = (nFr + nMath + nHG + nSci + nOral) / 5;
         const noteFinale = (moyEpreuves * 0.6) + (moyGen * 0.4);
 
@@ -5886,15 +5906,16 @@ window.exportSimulationPDF = function(footerText) {
         if (noteFinale >= 14) mention = "Admis - Mention Bien";
         if (noteFinale >= 16) mention = "Admis - Mention Très Bien";
 
-        // --- RENDU PDF ---
+        // --- RENDU GRAPHIQUE ---
         if (count > 0) doc.addPage();
         count++;
 
+        // En-tête établissement
         if (typeof addSmartLogo === 'function') addSmartLogo(doc, 10, 10, 30);
         
         doc.setFontSize(10); doc.setTextColor(100);
         doc.text("SIMULATION DNB", 200, 15, {align:'right'});
-        doc.text(`Session ${DB.config.year}`, 200, 20, {align:'right'});
+        doc.text(`Session ${DB.config.year || new Date().getFullYear()}`, 200, 20, {align:'right'});
 
         doc.setFontSize(16); doc.setTextColor(44, 62, 80); doc.setFont("helvetica", "bold");
         doc.text(DB.config.schoolName || "Établissement", 105, 30, {align:'center'});
@@ -5902,16 +5923,14 @@ window.exportSimulationPDF = function(footerText) {
         doc.setFontSize(14); doc.setTextColor(0); 
         doc.text("FICHE DE SIMULATION INDIVIDUELLE", 105, 42, {align:'center'});
 
-        // Bloc Élève
+        // Bloc Identité Élève
         doc.setFillColor(245, 245, 245); doc.rect(15, 50, 180, 20, 'F');
         doc.setDrawColor(200); doc.rect(15, 50, 180, 20, 'S');
         doc.setFontSize(12); doc.setTextColor(0);
         doc.text(`Élève :  ${s.nom} ${s.prenom}`, 20, 62);
-        
-        // [FIX DEV IA] Position de la classe corrigée à 120 (au lieu de 150)
         doc.text(`Classe : ${s.classe}`, 120, 62);
 
-        // Tableau
+        // Tableau des notes
         const rows = [
             ["Français (Écrit)", nFr.toFixed(2)],
             ["Mathématiques (Écrit)", nMath.toFixed(2)],
@@ -5934,7 +5953,7 @@ window.exportSimulationPDF = function(footerText) {
             styles: { fontSize: 10, cellPadding: 3 }
         });
 
-        // Résultat
+        // Cartouche de résultat
         const finalY = doc.lastAutoTable.finalY + 15;
         doc.setDrawColor(0); doc.setLineWidth(0.5);
         doc.rect(40, finalY, 130, 45);
@@ -5946,13 +5965,12 @@ window.exportSimulationPDF = function(footerText) {
         doc.setFontSize(14);
         doc.text(mention.toUpperCase(), 105, finalY + 38, {align:'center'});
 
-        // [FIX DEV IA] Pied de page dynamique (Multiligne)
+        // Pied de page
         doc.setTextColor(150); doc.setFontSize(9); doc.setFont("helvetica", "italic");
-        // split('\n') permet de gérer les sauts de ligne entrés par l'utilisateur
         doc.text(footerText.split('\n'), 105, 275, {align:'center'});
     });
 
-    doc.save(`Simulations_DNB_${new Date().toLocaleDateString().replace(/\//g,'-')}.pdf`);
+    doc.save(`Releves_Simulation_${new Date().toLocaleDateString().replace(/\//g,'-')}.pdf`);
 };
 
 function exportDatavisXLSX() {
