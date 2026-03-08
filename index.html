@@ -4649,23 +4649,24 @@ window.openTableLabelConfig = function() {
 /**
  * Moteur de rendu PDF dédié aux Étiquettes de TABLE
  */
-/**
- * Moteur de rendu PDF dédié aux Étiquettes de TABLE
- */
 function generateTableLabelsPDF(nbCols, nbRows) {
+    // --- SYNCHRONISATION INITIALE ---
+    if (window.syncDistributionData) window.syncDistributionData();
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const items = [];
 
-    // 1. Récupération des élèves
+    // 1. Récupération des élèves (Désormais synchronisés)
     if (DB.distribution && Object.keys(DB.distribution).length > 0) {
         Object.keys(DB.distribution).sort().forEach(roomName => {
+            if (roomName === "Zone Tampon") return; 
             DB.distribution[roomName].forEach(s => {
                 items.push({
                     room: roomName,
                     name: `${s.nom} ${s.prenom}`,
                     classe: s.classe,
-                    code: s.anonymat || ""
+                    code: s.anonymat || "" // Sera à jour grâce à sync
                 });
             });
         });
@@ -4684,7 +4685,7 @@ function generateTableLabelsPDF(nbCols, nbRows) {
     const boxH = (297 - 2*m) / nbRows;
     const perPage = nbCols * nbRows;
 
-    // 3. Dessin sur le PDF (C'est cette boucle qui avait disparu !)
+    // 3. Boucle de dessin
     items.forEach((item, i) => {
         const idxPage = i % perPage;
         if (i > 0 && idxPage === 0) doc.addPage();
@@ -4693,17 +4694,14 @@ function generateTableLabelsPDF(nbCols, nbRows) {
         const row = Math.floor(idxPage / nbCols);
         const x = m + col * boxW;
         const y = m + row * boxH;
-        
         const cx = x + boxW/2;
         const cy = y + boxH/2;
         
-        // Tracé du cadre avec pointillés
         doc.setDrawColor(200);
         doc.setLineDash([1, 1]);
         doc.rect(x, y, boxW, boxH);
         doc.setLineDash([]);
         
-        // Textes
         doc.setFontSize(8);
         doc.setTextColor(100);
         doc.text(`DNB ${DB.config.year || ""} - Salle ${item.room}`, cx, y + 8, {align:'center'});
@@ -4719,7 +4717,7 @@ function generateTableLabelsPDF(nbCols, nbRows) {
         
         if (item.code) {
              doc.setFontSize(11);
-             doc.setTextColor(192, 57, 43);
+             doc.setTextColor(192, 57, 43); // Rouge élégant pour l'anonymat
              doc.text(item.code, cx, y + boxH - 6, {align:'center'});
         }
     });
@@ -4938,10 +4936,14 @@ window.openLabelConfig = function() {
 };
 
 // =========================================================
-// === MOTEUR DE GÉNÉRATION PDF (V3) ===
+// === MOTEUR DE GÉNÉRATION PDF (V3) - VERSION CORRIGÉE ===
 // =========================================================
 
 window.generateLabelsEngine = function(params) {
+    // --- 0. SÉCURITÉ DE SYNCHRONISATION (L'AJOUT CRUCIAL) ---
+    // On s'assure que les données (anonymat, salles) sont fraîches avant l'export
+    if (window.syncDistributionData) window.syncDistributionData();
+
     // 1. Initialisation
     if (!window.jspdf) return alert("Erreur : La librairie jsPDF n'est pas chargée.");
     const { jsPDF } = window.jspdf;
@@ -4967,6 +4969,7 @@ window.generateLabelsEngine = function(params) {
         if (params.sort === 'room' && DB.distribution) {
             const rooms = Object.keys(DB.distribution).sort();
             rooms.forEach(r => {
+                if (r === "Zone Tampon") return; // On ne génère pas pour la zone tampon
                 const inRoom = DB.distribution[r].sort((a,b) => a.nom.localeCompare(b.nom));
                 inRoom.forEach(s => {
                     DB.exams.forEach(ex => items.push(createLabelData(s, r, ex.name)));
@@ -4983,11 +4986,11 @@ window.generateLabelsEngine = function(params) {
             }
 
             sortedStudents.forEach(s => {
-                // Trouver la salle
+                // Trouver la salle de manière dynamique pour être sûr du placement
                 let room = "---";
                 if (DB.distribution) {
                     for (const [rName, list] of Object.entries(DB.distribution)) {
-                        if (list.some(st => st.id === s.id)) { room = rName; break; }
+                        if (list.some(st => st.nom === s.nom && st.prenom === s.prenom)) { room = rName; break; }
                     }
                 }
                 DB.exams.forEach(ex => items.push(createLabelData(s, room, ex.name)));
@@ -4998,11 +5001,11 @@ window.generateLabelsEngine = function(params) {
     // B. REGROUPEMENT PAR ÉPREUVE (Logistique : Distribution par matière)
     else if (grouping === 'exam') {
         DB.exams.forEach(exam => {
-            
             // Tri par Salle pour CETTE épreuve
             if (params.sort === 'room' && DB.distribution) {
                 const rooms = Object.keys(DB.distribution).sort();
                 rooms.forEach(r => {
+                    if (r === "Zone Tampon") return;
                     const inRoom = DB.distribution[r].sort((a,b) => a.nom.localeCompare(b.nom));
                     inRoom.forEach(s => {
                         items.push(createLabelData(s, r, exam.name));
@@ -5023,18 +5026,16 @@ window.generateLabelsEngine = function(params) {
                     let room = "---";
                     if (DB.distribution) {
                         for (const [rName, list] of Object.entries(DB.distribution)) {
-                            if (list.some(st => st.id === s.id)) { room = rName; break; }
+                            if (list.some(st => st.nom === s.nom && st.prenom === s.prenom)) { room = rName; break; }
                         }
                     }
                     items.push(createLabelData(s, room, exam.name));
                 });
             }
-
             // Saut de page OBLIGATOIRE à la fin de chaque épreuve
             items.push({ type: 'BREAK' });
         });
     }
-
 
     if (items.length === 0) return alert("Rien à générer.");
 
@@ -5055,12 +5056,12 @@ window.generateLabelsEngine = function(params) {
 
     let idxPage = 0;
 
-    // Nettoyage
+    // Nettoyage des breaks inutiles à la fin
     while(items.length > 0 && items[items.length-1].type === 'BREAK') items.pop();
 
     // 4. Boucle d'impression
     items.forEach((item, i) => {
-        // Saut de page forcé
+        // Gestion du Saut de page forcé (BREAK)
         if (item.type === 'BREAK') {
             const remainder = idxPage % perPage;
             if (remainder !== 0) idxPage += (perPage - remainder);
@@ -5068,8 +5069,9 @@ window.generateLabelsEngine = function(params) {
         }
 
         // Nouvelle Page
-        if (i === 0 || (idxPage > 0 && idxPage % perPage === 0)) {
+        if (idxPage === 0 || idxPage % perPage === 0) {
             if (idxPage > 0) doc.addPage();
+            // Traits de repère pour les coins de la page
             doc.setDrawColor(200); doc.setLineWidth(0.1);
             doc.line(m-2, m, m, m); doc.line(pageW-m, m, pageW-m+2, m);
             doc.line(m-2, pageH-m, m, pageH-m); doc.line(pageW-m, pageH-m, pageW-m+2, pageH-m);
@@ -5082,24 +5084,25 @@ window.generateLabelsEngine = function(params) {
         const cutX = x + (boxW * 0.5); 
         const s = item.student;
 
-        // Cadre
+        // Tracé du Cadre de l'étiquette
         doc.setDrawColor(230); doc.setLineWidth(0.1);
         doc.rect(x, y, boxW, boxH);
 
-        // Point Rouge (Commun)
-        if (s.tiersTemps || s.amenagements || (s.labels && s.labels.length > 0)) {
-            doc.setFillColor(231, 76, 60);
+        // Point Rouge indicateur d'aménagement (Tiers-Temps / Label)
+        if (s.tiersTemps || s.tt || (s.labels && s.labels.length > 0)) {
+            doc.setFillColor(231, 76, 60); // Couleur corail/rouge
             doc.circle(x + boxW - 4, y + 4, 1.5, 'F');
         }
 
-        // --- MODE DNB ---
+        // --- MODE DNB (OFFICIEL) ---
         if (params.mode === 'DNB') {
+            // Trait de coupe vertical en pointillés
             doc.setDrawColor(0); doc.setLineWidth(0.2); doc.setLineDash([2, 2], 0);
             doc.line(cutX, y, cutX, y + boxH);
             doc.setLineDash([]);
             doc.setFontSize(10); doc.setTextColor(150); doc.text("✂", cutX - 1.5, y + boxH - 1);
 
-            // GAUCHE : ANONYMAT + SALLE
+            // GAUCHE : ANONYMAT + SALLE (Zone secrète)
             const centerXLeft = x + (boxW * 0.25);
             const centerY = y + (boxH / 2);
 
@@ -5112,7 +5115,7 @@ window.generateLabelsEngine = function(params) {
             doc.setFont("helvetica", "normal"); doc.setFontSize(8);
             doc.text(item.exam || "", centerXLeft, y + boxH - 4, {align:'center', maxWidth:(boxW*0.45)});
 
-            // DROITE : IDENTITÉ
+            // DROITE : IDENTITÉ (Zone pour le surveillant)
             const mx = cutX + 3;
             doc.setTextColor(0); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
             doc.text(`${s.nom}`.toUpperCase(), mx, y + 7);
@@ -5122,10 +5125,13 @@ window.generateLabelsEngine = function(params) {
             let examText = item.exam || "";
             if(examText.length > 22) examText = examText.substring(0, 22) + "...";
             doc.text(examText, mx, y + 23);
-            doc.setFont("helvetica", "bold"); doc.text(`${s.anonymat}`, mx, y + boxH - 4);
+            
+            // Petit rappel de l'anonymat à droite en bas
+            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+            doc.text(`${s.anonymat || '---'}`, mx, y + boxH - 4);
         }
 
-        // --- MODE CUSTOM ---
+        // --- MODE CUSTOM (PERSONNALISÉ) ---
         else {
             const cfg = params.custom || {};
             const showCutLine = (cfg.hasCutLine === true);
