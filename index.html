@@ -610,6 +610,7 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
             <button class="submenu-item" onclick="nav('convoc-eleves', this)">🎓 Élèves</button>
             <button class="submenu-item" onclick="nav('convoc-profs', this)">👔 Professeurs</button>
         </div>
+<button class="menu-item" onclick="nav('corr-repartition', this); renderCorrectionsConfig();">📦 Corrections</button>
 
         <button class="menu-item" id="btnRes" onclick="toggleSubmenu('resMenu', this)">📊 Résultats</button>
         <div id="resMenu" class="submenu">
@@ -1063,6 +1064,79 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
 
 </div> 
 
+<div id="corr-repartition" class="section">
+    <div class="card">
+        <div class="card-header-flex">
+            <h3>📦 Répartition des Copies par Correcteur</h3>
+            <select id="corrSubjectSelect" onchange="renderCorrectionsConfig()" style="width: 250px; font-weight: bold; color: #2980b9; padding: 8px;">
+                <option value="fr">Français</option>
+                <option value="math">Mathématiques</option>
+                <option value="hg">Hist-Géo / EMC</option>
+                <option value="svt">SVT</option>
+                <option value="pc">Physique-Chimie</option>
+                <option value="tech">Technologie</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom: 25px; display: flex; gap: 20px; align-items: flex-end; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #eee;">
+            <div style="flex: 1;">
+                <label style="font-weight: bold; display: block; margin-bottom: 8px; color: #2c3e50;">Mode de répartition</label>
+                <select id="corrModeSelect" onchange="updateCorrGlobalMode()" style="background: white; width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 5px;">
+                    <option value="auto">⚖️ Équitable (Calcul automatique sous contraintes)</option>
+                    <option value="manual_quota">✍️ Quotas Manuels (Saisie libre du nombre de copies)</option>
+                    <option value="manual_class">📦 Mode Manuel (1 lot indivisible = 1 classe)</option>
+                </select>
+            </div>
+            <div>
+                <button class="btn btn-primary" onclick="generateDistributionLots()" style="background: #8e44ad; padding: 12px 25px; font-size: 1.1rem; font-weight: bold; box-shadow: 0 4px 6px rgba(142, 68, 173, 0.3);">🚀 Générer les Lots</button>
+            </div>
+        </div>
+
+        <div id="corrConfigArea">
+            <div style="margin-bottom: 15px; text-align: right;">
+                <button class="btn btn-success" onclick="openAddCorrectorModal()" style="padding: 10px 20px;">➕ Ajouter un professeur</button>
+            </div>
+            <div style="overflow-x: auto; background: white; border-radius: 8px; border: 1px solid #eee;">
+                <table class="table table-bordered" style="width: 100%; text-align: left; margin: 0;" id="corrTable">
+                    <thead id="corrThead" style="background: #2c3e50; color: white;">
+                        </thead>
+                    <tbody id="corrTbody">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="corrManualClassArea" style="display: none; margin-top: 25px; background: #ebf5fb; padding: 20px; border-radius: 8px; border: 1px solid #bce8f1;">
+            <h4 style="color: #2980b9; margin-top: 0;">📌 Affectation des classes aux correcteurs</h4>
+            <p style="font-size: 0.9rem; color: #555;">Chaque classe constitue un lot indivisible. Sélectionnez le correcteur pour chaque classe.</p>
+            <table class="table table-bordered" style="background: white;">
+                <thead style="background: #3498db; color: white;">
+                    <tr>
+                        <th style="width: 30%;">Classe (Lot)</th>
+                        <th style="width: 20%; text-align: center;">Copies anonymées</th>
+                        <th style="width: 50%;">Correcteur assigné</th>
+                    </tr>
+                </thead>
+                <tbody id="corrManualClassTbody">
+                    </tbody>
+            </table>
+        </div>
+
+        <div id="corrResultsArea" style="margin-top: 30px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;"></div>
+    </div>
+</div>
+
+<div id="addCorrectorModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">Sélectionner un enseignant</div>
+        <select id="correctorProfSelect" style="margin-bottom: 20px;"></select>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('addCorrectorModal').style.display='none'">Annuler</button>
+            <button class="btn btn-success" onclick="confirmAddCorrector()">Ajouter</button>
+        </div>
+    </div>
+</div>
+
 <div class="feedback-widget">
     <div class="feedback-box" id="feedbackBox">
         <div class="feedback-header">
@@ -1155,7 +1229,21 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
         <div id="res-import" class="section">
             <div class="card">
                 <div class="card-header-flex"><h3>Import des Résultats DNB Blanc</h3><button class="lock-btn" id="lock-grades" onclick="toggleLock('grades')">🔓 Verrouiller</button></div>
-                <div id="wrapper-grades" class=""><div class="row"><div class="import-box" style="border:2px dashed #27ae60; background:#f0fff4;"><span class="import-title" style="color:#27ae60;">📗 Sélectionner Fichier Notes (Import Direct)</span><input type="file" id="fileGrades" accept=".csv,.xlsx" style="width:100%; cursor:pointer;" onchange="handleFileSelect('grades')"></div></div></div>
+                <div id="wrapper-grades" class="">
+    <div class="row" style="display: flex; gap: 15px; align-items: stretch;">
+        <div class="import-box" style="flex: 1; border: 2px dashed #27ae60; background: #f0fff4; margin-bottom: 0;">
+            <span class="import-title" style="color: #27ae60;">📗 Sélectionner Fichier Notes (Import Direct)</span>
+            <input type="file" id="fileGrades" accept=".csv,.xlsx" style="width:100%; cursor:pointer;" onchange="handleFileSelect('grades')">
+        </div>
+        
+        <div style="flex: 0.4; display: flex;">
+            <button class="btn btn-primary" onclick="exportAnonymousGradeSheet()" style="width: 100%; background-color: #2980b9; border: none; border-radius: 8px; color: white; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 10px;">
+                <span style="font-size: 1.2rem;">📊</span>
+                <span style="font-weight: bold; font-size: 0.9rem; text-align: center;">Générer Bordereau Anonyme</span>
+            </button>
+        </div>
+    </div>
+</div>
                 <hr>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; background:#ecf0f1; padding:10px; border-radius:5px;">
     <div style="display:flex; gap:10px; align-items:center;">
@@ -3687,33 +3775,33 @@ function executeDistribution() {
     // [PDF Exports]
     function drawHeader(doc, title, subtitle) { addSmartLogo(doc, 10, 10, 35); doc.setFontSize(18); doc.text(DB.config.schoolName, 60, 20); doc.setFontSize(14); doc.text("DNB Blanc - Session " + DB.config.year, 60, 28); doc.setFontSize(16); doc.text(title, 14, 45); if(subtitle) { doc.setFontSize(12); doc.text(subtitle, 14, 52); } return 60; }
 /**
- * Génère le PDF des listes d'affichage triées par ordre alphabétique
- * Pourquoi : Assure une lecture fluide pour les élèves devant les salles.
- */
-/**
- * Génère le PDF des listes d'affichage triées par ordre alphabétique
+ * Génère le PDF des listes d'affichage avec ajout de l'effectif de la salle
+ * @why Permet un contrôle rapide du nombre d'élèves par les surveillants.
  */
 function exportDisplayPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     let pageCount = 0;
-    
+
     DB.rooms.forEach((r) => {
         let studentsInRoom = DB.distribution[r.nom] || [];
         if (studentsInRoom.length === 0) return;
-        
+
         // Tri alphabétique
-        studentsInRoom.sort((a, b) => {
-            const nomA = a.nom.toUpperCase();
-            const nomB = b.nom.toUpperCase();
-            if (nomA < nomB) return -1;
-            if (nomA > nomB) return 1;
-            return a.prenom.localeCompare(b.prenom);
-        });
+        studentsInRoom.sort((a, b) => a.nom.localeCompare(b.nom));
 
         if (pageCount > 0) doc.addPage();
+        
+        // Appel du header standard
         drawHeader(doc, `Liste d'affichage - Salle ${r.nom}`, r.isTT ? "Tiers-Temps" : "Standard");
         
+        // --- AJOUT : AFFICHAGE DE L'EFFECTIF ---
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Effectif : ${studentsInRoom.length} élèves`, 195, 52, { align: 'right' });
+        doc.setFont("helvetica", "normal");
+        // ---------------------------------------
+
         const body = studentsInRoom.map(s => [
             s.nom.toUpperCase(),
             s.prenom,
@@ -3721,99 +3809,68 @@ function exportDisplayPDF() {
             s.anonymat || "",
             s.tt ? "OUI" : ""
         ]);
-        
-        // Configuration AutoTable avec le thème "Grille"
+
         doc.autoTable({
             head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT']],
             body: body,
             startY: 60,
-            theme: 'grid', // Force les bordures
-            styles: {
-                fillColor: [255, 255, 255], // Fond 100% blanc
-                textColor: [0, 0, 0], // Texte noir
-                lineColor: [0, 0, 0], // Bordure noire
-                lineWidth: 0.2 // Épaisseur de la ligne (bonne visibilité à l'impression)
-            },
-            headStyles: {
-                fillColor: [230, 230, 230], // Gris clair pour bien distinguer les colonnes
-                textColor: [0, 0, 0],
-                fontStyle: 'bold'
-            },
-            alternateRowStyles: {
-                fillColor: [255, 255, 255] // Désactive complètement l'alternance de couleurs
-            }
+            theme: 'grid',
+            styles: { fontSize: 10, cellPadding: 3 },
+            headStyles: { fillColor: [44, 62, 80] }
         });
-        
         pageCount++;
     });
     doc.save("listes_affichage.pdf");
 }
 
 /**
- * Génère le PDF des listes d'émargement triées par ordre alphabétique
+ * Génère le PDF des listes d'émargement avec ajout de l'effectif de la salle
+ * @why Facilite le comptage des copies en fin d'épreuve.
  */
 function exportSignPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     let pageCount = 0;
-    
+
     DB.exams.forEach(exam => {
         DB.rooms.forEach(room => {
             let studentsInRoom = DB.distribution[room.nom] || [];
             if (studentsInRoom.length === 0) return;
-            
-            // Tri alphabétique
-            studentsInRoom.sort((a, b) => {
-                const nomA = a.nom.toUpperCase();
-                const nomB = b.nom.toUpperCase();
-                if (nomA < nomB) return -1;
-                if (nomA > nomB) return 1;
-                return a.prenom.localeCompare(b.prenom);
-            });
+
+            studentsInRoom.sort((a, b) => a.nom.localeCompare(b.nom));
 
             if (pageCount > 0) doc.addPage();
-            
+
             const dur = room.isTT ? exam.durTT : exam.durStd;
             const startTime = room.isTT ? (exam.timeTT || exam.time) : exam.time;
             const endTime = addMinutes(startTime, dur);
+
+            drawHeader(doc, `Émargement - ${exam.name} - Salle ${room.nom}`, `Date: ${exam.date}`);
             
-            drawHeader(doc, `Émargement - ${exam.name} - Salle ${room.nom}`, `Date: ${exam.date} | Horaire: ${startTime} - ${endTime}`);
-            
+            // --- AJOUT : AFFICHAGE DE L'EFFECTIF ET HORAIRE ---
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "bold");
+            doc.text(`Horaire : ${startTime} - ${endTime}`, 14, 58);
+            doc.text(`Effectif : ${studentsInRoom.length} élèves`, 195, 58, { align: 'right' });
+            doc.setFont("helvetica", "normal");
+            // --------------------------------------------------
+
             const body = studentsInRoom.map(s => [
                 s.nom.toUpperCase(),
                 s.prenom,
                 s.classe,
                 s.anonymat || "",
-                s.tt ? "TT" : "",
-                "" // Cellule vide pour la signature
+                "" // Case signature
             ]);
-            
-            // Configuration AutoTable avec le thème "Grille"
+
             doc.autoTable({
-                head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'TT', 'Signature']],
+                head: [['Nom', 'Prénom', 'Classe', 'Anonymat', 'Signature']],
                 body: body,
                 startY: 65,
-                theme: 'grid', // Force les bordures
-                styles: {
-                    fillColor: [255, 255, 255],
-                    textColor: [0, 0, 0],
-                    lineColor: [0, 0, 0],
-                    lineWidth: 0.2,
-                    valign: 'middle' // Centre le texte verticalement, idéal pour les signatures
-                },
-                headStyles: {
-                    fillColor: [230, 230, 230],
-                    textColor: [0, 0, 0],
-                    fontStyle: 'bold'
-                },
-                alternateRowStyles: {
-                    fillColor: [255, 255, 255] // Désactive le fond alterné
-                },
-                columnStyles: { 
-                    5: { minCellWidth: 40 } // Maintient un large espace pour laisser les élèves signer
-                } 
+                theme: 'grid',
+                styles: { minCellHeight: 12, valign: 'middle' },
+                headStyles: { fillColor: [44, 62, 80] }
             });
-            
             pageCount++;
         });
     });
@@ -9447,6 +9504,586 @@ function toggleFeedback() {
         // Fermer après envoi
         toggleFeedback();
     }
+	
+/**
+ * Génère un bordereau de saisie Excel avec un onglet par matière.
+ * @why Plus ergonomique : chaque correcteur travaille sur sa propre feuille sans déranger les autres.
+ */
+async function exportAnonymousGradeSheet() {
+    if (!DB.students || DB.students.length === 0) return alert("❌ Aucun élève dans la base.");
+
+    // 1. Chargement dynamique d'ExcelJS
+    if (typeof ExcelJS === 'undefined') {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+        document.head.appendChild(script);
+        await new Promise(resolve => script.onload = resolve);
+    }
+
+    const workbook = new ExcelJS.Workbook();
+
+    // 2. Définition de la liste des matières à créer
+    // On commence par les matières fixes
+    let subjects = ["Français", "Mathématiques", "HG", "EMC"];
+    
+    // On ajoute dynamiquement les sciences configurées
+    const activeSciences = DB.config.scienceSubjects || [];
+    if (activeSciences.length > 0) {
+        subjects = subjects.concat(activeSciences);
+    } else {
+        subjects.push("Sciences");
+    }
+
+    // 3. Préparation des données élèves (triées par anonymat)
+    const sortedStudents = [...DB.students]
+        .filter(s => s.anonymat)
+        .sort((a, b) => a.anonymat.localeCompare(b.anonymat));
+
+    // 4. Création d'un onglet pour chaque matière
+    subjects.forEach(subjectName => {
+        const sheet = workbook.addWorksheet(subjectName);
+
+        // Configuration des colonnes pour cet onglet
+        sheet.columns = [
+            { header: "Code Anonymat", key: "anonymat", width: 25 },
+            { header: `${subjectName}`, key: "note", width: 20 }
+        ];
+
+        // Style de l'en-tête de l'onglet
+        const headerRow = sheet.getRow(1);
+        headerRow.height = 25;
+        headerRow.eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = {
+                top: { style: 'thin' }, left: { style: 'thin' },
+                bottom: { style: 'thin' }, right: { style: 'thin' }
+            };
+        });
+
+        // Ajout des lignes d'élèves
+        sortedStudents.forEach(s => {
+            const row = sheet.addRow({
+                anonymat: s.anonymat,
+                note: "" // Case vide pour la saisie
+            });
+            row.height = 20;
+
+            // Bordures et centrage pour chaque cellule
+            row.eachCell({ includeEmpty: true }, (cell) => {
+                cell.border = {
+                    top: { style: 'thin' }, left: { style: 'thin' },
+                    bottom: { style: 'thin' }, right: { style: 'thin' }
+                };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+        });
+    });
+
+    // 5. Génération et téléchargement
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    
+    // Nom du fichier avec la ville si disponible
+    const schoolCity = DB.config.schoolCity || DB.config.city || "DNB";
+    anchor.download = `Bordereaux_Saisie_Par_Matiere.xlsx`;
+    
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+}
+
+/**
+ * MOTEUR D'AFFECTATION (LES 3 MODES)
+ */
+function initCorrectionsModule() {
+    if (!DB.corrections) DB.corrections = { settings: {}, lots: {} };
+    window.allClasses = [...new Set(DB.students.map(s => s.classe).filter(c => c && c !== "Non Classé"))].sort();
+}
+
+function updateCorrGlobalMode() {
+    initCorrectionsModule();
+    const subj = document.getElementById('corrSubjectSelect').value;
+    if(!DB.corrections.settings[subj]) DB.corrections.settings[subj] = { mode: 'auto', teachers: [], manualMap: {} };
+    DB.corrections.settings[subj].mode = document.getElementById('corrModeSelect').value;
+    renderCorrectionsConfig();
+}
+
+window.renderCorrectionsConfig = function() {
+    initCorrectionsModule();
+    const subj = document.getElementById('corrSubjectSelect').value;
+    if(!DB.corrections.settings[subj]) DB.corrections.settings[subj] = { mode: 'auto', teachers: [], manualMap: {} };
+    
+    const config = DB.corrections.settings[subj];
+    document.getElementById('corrModeSelect').value = config.mode;
+    
+    const isAutoOrQuota = (config.mode === 'auto' || config.mode === 'manual_quota');
+    const isManualClass = config.mode === 'manual_class';
+
+    // Affichage des zones
+    document.getElementById('corrManualClassArea').style.display = isManualClass ? 'block' : 'none';
+
+    // Rendu THEAD
+    const thead = document.getElementById('corrThead');
+    const tbody = document.getElementById('corrTbody');
+    
+    if (isAutoOrQuota) {
+        thead.innerHTML = `<tr>
+            <th style="width: 20%; padding: 12px;">Professeur</th>
+            <th style="width: 30%; padding: 12px;">Classes en responsabilité</th>
+            <th style="width: 15%; text-align:center; padding: 12px;">Corrige ses élèves ?</th>
+            <th style="width: 15%; text-align:center; padding: 12px;">Quota copies</th>
+            <th style="width: 10%; text-align:center; padding: 12px;">Action</th>
+        </tr>`;
+    } else {
+        thead.innerHTML = `<tr>
+            <th style="width: 80%; padding: 12px;">Équipe de correction (Professeurs sélectionnés)</th>
+            <th style="width: 20%; text-align:center; padding: 12px;">Action</th>
+        </tr>`;
+    }
+
+    // Rendu TBODY
+    tbody.innerHTML = '';
+    if (config.teachers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#999; padding: 20px;">Aucun correcteur pour le moment. Cliquez sur "Ajouter".</td></tr>`;
+    }
+
+    config.teachers.forEach((tc, idx) => {
+        const profDb = DB.teachers.find(t => t.id === tc.id);
+        const nomComplet = profDb ? `${profDb.nom} ${profDb.prenom}` : 'Inconnu';
+
+        if (isAutoOrQuota) {
+            
+            // ---> LE CORRECTIF VISUEL DES CASES EST ICI <---
+            let classesHtml = `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+            window.allClasses.forEach(cls => {
+                const isChecked = tc.classes.includes(cls) ? 'checked' : '';
+                classesHtml += `<label style="background:#e8f0fe; border: 1px solid #d2e3fc; color: #1967d2; padding:5px 12px; border-radius:16px; font-size:0.85rem; font-weight:bold; cursor:pointer; display:inline-flex; align-items:center; gap:8px; margin:0; transition: all 0.2s;">
+                    <input type="checkbox" ${isChecked} onchange="toggleCorrectorClass('${subj}', ${idx}, '${cls}', this.checked)" style="margin:0; position:static; cursor:pointer; width:16px; height:16px;">
+                    <span style="line-height:1; margin-top:1px;">${cls}</span>
+                </label>`;
+            });
+            classesHtml += `</div>`;
+            // ---> FIN DU CORRECTIF <---
+            
+            const quotaDisabled = (config.mode === 'auto') ? 'disabled style="opacity:0.5;"' : '';
+
+            tbody.innerHTML += `<tr>
+                <td style="font-weight:bold;">${nomComplet}</td>
+                <td>${classesHtml}</td>
+                <td style="text-align:center;">
+                    <input type="checkbox" ${tc.allowOwn ? 'checked' : ''} onchange="toggleCorrectorOwn('${subj}', ${idx}, this.checked)" style="transform: scale(1.5);">
+                </td>
+                <td style="text-align:center;">
+                    <input type="number" value="${tc.quota || 0}" min="0" onchange="updateCorrectorQuota('${subj}', ${idx}, this.value)" style="width:70px; text-align:center;" ${quotaDisabled}>
+                </td>
+                <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeCorrector('${subj}', ${idx})">🗑️</button></td>
+            </tr>`;
+        } else {
+            // Vue épurée pour le mode manuel par classe
+            tbody.innerHTML += `<tr>
+                <td style="font-weight:bold; font-size: 1.1rem; color: #2c3e50;">👨‍🏫 ${nomComplet}</td>
+                <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeCorrector('${subj}', ${idx})">🗑️ Retirer</button></td>
+            </tr>`;
+        }
+    });
+
+    // Rendu de la zone d'affectation des classes (Mode 'manual_class' uniquement)
+    if (isManualClass) {
+        if (!config.manualMap) config.manualMap = {};
+        const pool = DB.students.filter(s => s.anonymat && s.anonymat.trim() !== "");
+        let classCounts = {};
+        pool.forEach(s => {
+            if(!s.classe || s.classe === "Non Classé") return;
+            classCounts[s.classe] = (classCounts[s.classe] || 0) + 1;
+        });
+
+        const manualTbody = document.getElementById('corrManualClassTbody');
+        manualTbody.innerHTML = '';
+        
+        Object.keys(classCounts).sort().forEach(cls => {
+            let optionsHtml = `<option value="">-- Sélectionner un correcteur --</option>`;
+            config.teachers.forEach(tc => {
+                const profDb = DB.teachers.find(t => t.id === tc.id);
+                const isSelected = config.manualMap[cls] === tc.id ? 'selected' : '';
+                optionsHtml += `<option value="${tc.id}" ${isSelected}>${profDb ? profDb.nom + ' ' + profDb.prenom : 'Inconnu'}</option>`;
+            });
+
+            manualTbody.innerHTML += `<tr>
+                <td style="font-weight:bold; font-size: 1.1rem;">${cls}</td>
+                <td style="text-align:center; font-weight:bold; color: #e67e22;">${classCounts[cls]} copies</td>
+                <td>
+                    <select onchange="updateManualMap('${subj}', '${cls}', this.value)" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                        ${optionsHtml}
+                    </select>
+                </td>
+            </tr>`;
+        });
+    }
+
+    renderLotsResult(subj);
+};
+
+// 2. ACTIONS UI
+window.openAddCorrectorModal = function() {
+    const select = document.getElementById('correctorProfSelect');
+    select.innerHTML = '';
+    DB.teachers.sort((a,b) => a.nom.localeCompare(b.nom)).forEach(t => {
+        select.innerHTML += `<option value="${t.id}">${t.nom} ${t.prenom} (${t.matiere})</option>`;
+    });
+    document.getElementById('addCorrectorModal').style.display = 'flex';
+};
+
+window.confirmAddCorrector = function() {
+    initCorrectionsModule();
+    const subj = document.getElementById('corrSubjectSelect').value;
+    if (!DB.corrections.settings[subj]) DB.corrections.settings[subj] = { mode: 'auto', teachers: [], manualMap: {} };
+
+    const profId = parseFloat(document.getElementById('correctorProfSelect').value);
+    if(DB.corrections.settings[subj].teachers.some(t => t.id === profId)) return alert("Professeur déjà dans l'équipe.");
+
+    DB.corrections.settings[subj].teachers.push({ id: profId, classes: [], allowOwn: false, quota: 0 });
+    document.getElementById('addCorrectorModal').style.display = 'none';
+    renderCorrectionsConfig();
+    if(typeof saveDB === 'function') saveDB();
+};
+
+window.removeCorrector = function(subj, idx) {
+    DB.corrections.settings[subj].teachers.splice(idx, 1);
+    renderCorrectionsConfig();
+};
+window.toggleCorrectorClass = function(subj, idx, cls, isChecked) {
+    const arr = DB.corrections.settings[subj].teachers[idx].classes;
+    if(isChecked) arr.push(cls);
+    else arr.splice(arr.indexOf(cls), 1);
+};
+window.toggleCorrectorOwn = function(subj, idx, val) { DB.corrections.settings[subj].teachers[idx].allowOwn = val; };
+window.updateManualMap = function(subj, cls, profId) {
+    if(!DB.corrections.settings[subj].manualMap) DB.corrections.settings[subj].manualMap = {};
+    if(profId === "") delete DB.corrections.settings[subj].manualMap[cls];
+    else DB.corrections.settings[subj].manualMap[cls] = parseFloat(profId);
+    if(typeof saveDB === 'function') saveDB();
+};
+window.updateCorrectorQuota = function(subj, idx, val) { 
+    DB.corrections.settings[subj].teachers[idx].quota = parseInt(val) || 0; 
+    if(typeof saveDB === 'function') saveDB();
+};
+// --- LE MOTEUR DE GÉNÉRATION ---
+window.generateDistributionLots = function() {
+    const subj = document.getElementById('corrSubjectSelect').value;
+    const config = DB.corrections.settings[subj];
+    let pool = DB.students.filter(s => s.anonymat && s.anonymat.trim() !== "");
+    
+    if(pool.length === 0) return alert("Aucun élève ne possède de code d'anonymat.");
+    if(!config || config.teachers.length === 0) return alert("Veuillez ajouter des correcteurs.");
+
+    let profsMap = {};
+    config.teachers.forEach(tc => {
+        const tDb = DB.teachers.find(t => t.id === tc.id);
+        profsMap[tc.id] = {
+            id: tc.id, name: tDb ? `${tDb.nom} ${tDb.prenom}` : 'Inconnu',
+            classes: tc.classes, allowOwn: tc.allowOwn, quota: tc.quota || 0, copies: [] 
+        };
+    });
+
+    // MODE 1 : 1 Lot = 1 Classe
+    if (config.mode === 'manual_class') {
+        let unassignedClasses = new Set();
+        pool.forEach(student => {
+            if(!student.classe || student.classe === "Non Classé") return;
+            const assignedProfId = config.manualMap && config.manualMap[student.classe];
+            
+            if (assignedProfId && profsMap[assignedProfId]) {
+                profsMap[assignedProfId].copies.push(student);
+            } else {
+                unassignedClasses.add(student.classe);
+            }
+        });
+
+        if (unassignedClasses.size > 0) {
+            alert(`⚠️ Attention : Vous n'avez pas assigné de correcteur pour les classes : ${Array.from(unassignedClasses).join(', ')}.`);
+        }
+
+        DB.corrections.lots[subj] = Object.values(profsMap).filter(p => p.copies.length > 0);
+        if(typeof saveDB === 'function') saveDB();
+        renderLotsResult(subj);
+        return;
+    }
+
+    // MODES 2 & 3 : Équitable (auto) ou Quotas Manuels
+    pool = pool.sort(() => Math.random() - 0.5);
+    const profsArray = Object.values(profsMap);
+    
+    if (config.mode === 'auto') {
+        const base = Math.floor(pool.length / profsArray.length);
+        const remainder = pool.length % profsArray.length;
+        profsArray.forEach((p, i) => p.quota = base + (i < remainder ? 1 : 0));
+    } else {
+        const totalQuota = profsArray.reduce((sum, p) => sum + p.quota, 0);
+        if (totalQuota < pool.length) return alert(`⚠️ Quotas insuffisants (${totalQuota} copies prévues pour ${pool.length} élèves).`);
+    }
+
+    let unassigned = [];
+    pool.forEach(student => {
+        let eligibles = profsArray.filter(p => p.copies.length < p.quota && (p.allowOwn || !p.classes.includes(student.classe)));
+        if (eligibles.length > 0) {
+            eligibles.sort((a,b) => (b.quota - b.copies.length) - (a.quota - a.copies.length));
+            eligibles[0].copies.push(student);
+        } else { unassigned.push(student); }
+    });
+
+    if (unassigned.length > 0) {
+        unassigned.forEach(student => {
+            let dispos = profsArray.filter(p => p.copies.length < p.quota);
+            if (dispos.length > 0) dispos[0].copies.push({...student, forced: true});
+            else profsArray[0].copies.push({...student, forced: true});
+        });
+    }
+
+    DB.corrections.lots[subj] = profsArray;
+    if(typeof saveDB === 'function') saveDB();
+    renderLotsResult(subj);
+};
+
+// RENDU VISUEL DES LOTS + BOUTON PDF
+window.renderLotsResult = function(subj) {
+    const area = document.getElementById('corrResultsArea');
+    area.innerHTML = '';
+    const lots = DB.corrections.lots[subj];
+    if(!lots || lots.length === 0) return;
+
+    // 1. Ajout du bouton d'export PDF en haut de la zone des résultats
+   const headerHtml = `
+    <div style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; background: #e8f8f5; padding: 15px; border-radius: 8px; border: 1px solid #1abc9c; margin-bottom: 10px;">
+        <h4 style="margin: 0; color: #16a085;">✅ Répartition terminée (${lots.length} lots)</h4>
+        <div style="display: flex; gap: 15px;">
+            <button class="btn btn-success" onclick="exportCorrectionsPDF('${subj}')" style="font-size: 1rem; padding: 10px 20px; box-shadow: 0 4px 6px rgba(46, 204, 113, 0.3);">
+                📄 Bordereaux (PDF)
+            </button>
+            <button class="btn btn-primary" onclick="exportCorrectionsExcel('${subj}')" style="font-size: 1rem; padding: 10px 20px; background-color: #27ae60; border-color: #2ecc71; box-shadow: 0 4px 6px rgba(39, 174, 96, 0.3);">
+                📊 Grilles de Saisie (Excel)
+            </button>
+        </div>
+    </div>
+`;
+area.innerHTML = headerHtml;
+
+    // 2. Affichage des cartes par professeur
+    lots.forEach(prof => {
+        // Tri des copies par code anonymat
+        prof.copies.sort((a,b) => (a.anonymat || "").localeCompare(b.anonymat || ""));
+        
+        let listHtml = prof.copies.map(c => {
+            const warning = c.forced ? `<span style="color:#e74c3c; font-size:0.7rem;" title="Attribution forcée (Contrainte ignorée)">⚠️</span>` : '';
+            return `<div style="padding:4px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; font-family:monospace; font-size:1rem;">
+                <span>${c.anonymat}</span> ${warning}
+            </div>`;
+        }).join('');
+
+        area.innerHTML += `
+            <div style="background:white; border:2px solid #3498db; border-radius:8px; overflow:hidden;">
+                <div style="background:#3498db; color:white; padding:10px; font-weight:bold; display:flex; justify-content:space-between;">
+                    <span>🎓 ${prof.name}</span>
+                    <span style="background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:12px;">${prof.copies.length} copies</span>
+                </div>
+                <div style="padding:15px; max-height:250px; overflow-y:auto; background:#fafafa;">
+                    ${listHtml || '<em style="color:#999;">Aucune copie attribuée</em>'}
+                </div>
+            </div>
+        `;
+    });
+};
+
+/**
+ * MOTEUR D'EXPORT PDF DES BORDEREAUX DE CORRECTION (Spécificité HG/EMC + Notes sur 20)
+ */
+window.exportCorrectionsPDF = function(subj) {
+    const lots = DB.corrections.lots[subj];
+    if (!lots || lots.length === 0) return alert("Aucun lot à exporter.");
+
+    // Dictionnaire pour les noms de matières
+    const subjectNames = {
+        'fr': 'Français', 'math': 'Mathématiques', 'hg': 'Histoire-Géographie / EMC',
+        'svt': 'SVT', 'pc': 'Physique-Chimie', 'tech': 'Technologie'
+    };
+    const matiereNom = subjectNames[subj] || subj;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    lots.forEach((prof, index) => {
+        // Saut de page pour chaque nouveau professeur
+        if (index > 0) doc.addPage();
+
+        // En-tête
+        doc.setFontSize(18);
+        doc.setTextColor(41, 128, 185);
+        doc.text(`BORDEREAU DE CORRECTION - DNB BLANC`, 105, 20, { align: "center" });
+        
+        doc.setFontSize(14);
+        doc.setTextColor(44, 62, 80);
+        doc.text(`Matière : ${matiereNom}`, 105, 30, { align: "center" });
+
+        doc.setFontSize(12);
+        doc.text(`Correcteur : ${prof.name}`, 14, 45);
+        doc.text(`Nombre de copies : ${prof.copies.length}`, 14, 52);
+
+        // --- CONFIGURATION DYNAMIQUE DU TABLEAU SELON LA MATIÈRE ---
+        let tableHead, tableBody, colStyles;
+
+        if (subj === 'hg') {
+            // Spécificité Histoire-Géographie / EMC (5 colonnes avec notes sur 20)
+            tableHead = [['N°', 'Code Anonymat', 'Note HG / 20', 'Note EMC / 20', 'Observations']];
+            tableBody = prof.copies.map((c, i) => [
+                (i + 1).toString(), 
+                c.anonymat, 
+                "", // Case vide HG
+                "", // Case vide EMC
+                ""  // Case vide Observations
+            ]);
+            colStyles = {
+                0: { halign: 'center', cellWidth: 15 },
+                1: { fontStyle: 'bold', halign: 'center', cellWidth: 40 },
+                2: { cellWidth: 35 }, // Espace note HG
+                3: { cellWidth: 35 }, // Espace note EMC
+                4: { cellWidth: 'auto' } // Reste pour observations
+            };
+        } else {
+            // Cas général pour les autres matières (4 colonnes avec note sur 20)
+            tableHead = [['N°', 'Code Anonymat', 'Note Globale / 20', 'Observations / Absences']];
+            tableBody = prof.copies.map((c, i) => [
+                (i + 1).toString(), 
+                c.anonymat, 
+                "", 
+                ""
+            ]);
+            colStyles = {
+                0: { halign: 'center', cellWidth: 15 },
+                1: { fontStyle: 'bold', halign: 'center', cellWidth: 40 },
+                2: { cellWidth: 45 }, // Espace note globale
+                3: { cellWidth: 'auto' } // Reste pour observations
+            };
+        }
+
+        // --- GÉNÉRATION DU TABLEAU ---
+        doc.autoTable({
+            startY: 60,
+            head: tableHead,
+            body: tableBody,
+            theme: 'grid',
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: 'center' },
+            columnStyles: colStyles,
+            styles: { fontSize: 11, cellPadding: 4, minCellHeight: 10 }
+        });
+
+        // Pied de page
+        const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
+        doc.setFontSize(9);
+        doc.setTextColor(150);
+        doc.text(`Ce bordereau est à restituer au secrétariat avec les copies corrigées.`, 105, pageHeight - 10, { align: "center" });
+    });
+
+    // Téléchargement
+    doc.save(`Bordereaux_Correction_${matiereNom.replace(/[\s\/]+/g, '_')}.pdf`);
+};
+
+/**
+ * MOTEUR D'EXPORT EXCEL DES GRILLES DE SAISIE (Corrigé avec auto-chargement)
+ */
+window.exportCorrectionsExcel = async function(subj) {
+    const lots = DB.corrections.lots[subj];
+    if (!lots || lots.length === 0) return alert("Aucun lot à exporter.");
+
+    // 1. CHARGEMENT DYNAMIQUE DE LA LIBRAIRIE (Le correctif est ici)
+    if (typeof ExcelJS === 'undefined') {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+        document.head.appendChild(script);
+        // On attend que la librairie soit totalement chargée avant de continuer
+        await new Promise(resolve => script.onload = resolve);
+    }
+
+    const subjectNames = {
+        'fr': 'Français', 'math': 'Mathématiques', 'hg': 'Histoire-Géographie / EMC',
+        'svt': 'SVT', 'pc': 'Physique-Chimie', 'tech': 'Technologie'
+    };
+    const matiereNom = subjectNames[subj] || subj;
+
+    // 2. Initialisation du classeur
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Orga DNB Blanc';
+    workbook.created = new Date();
+
+    lots.forEach((prof) => {
+        // Nettoyage du nom pour l'onglet Excel (limite 31 caractères)
+        let safeSheetName = prof.name.replace(/[\[\]\*\?\/\\\:]/g, '').substring(0, 31);
+        const sheet = workbook.addWorksheet(safeSheetName);
+
+        // --- DÉFINITION DES COLONNES SELON LA MATIÈRE ---
+        if (subj === 'hg') {
+            sheet.columns = [
+                { header: 'N°', key: 'num', width: 8 },
+                { header: 'Code Anonymat', key: 'anonymat', width: 20 },
+                { header: 'Note HG / 20', key: 'noteHG', width: 18 },
+                { header: 'Note EMC / 20', key: 'noteEMC', width: 18 }
+            ];
+        } else {
+            sheet.columns = [
+                { header: 'N°', key: 'num', width: 8 },
+                { header: 'Code Anonymat', key: 'anonymat', width: 20 },
+                { header: 'Note Globale / 20', key: 'note', width: 22 }
+            ];
+        }
+
+        // --- STYLISATION DE L'EN-TÊTE ---
+        const headerRow = sheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2980B9' } }; 
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.height = 25;
+
+        // --- AJOUT DES DONNÉES ÉLÈVES ---
+        prof.copies.forEach((c, i) => {
+            let rowData = (subj === 'hg') 
+                ? { num: i + 1, anonymat: c.anonymat, noteHG: "", noteEMC: "" }
+                : { num: i + 1, anonymat: c.anonymat, note: "" };
+            
+            const row = sheet.addRow(rowData);
+            row.height = 20;
+
+            row.eachCell({ includeEmpty: true }, (cell) => {
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = {
+                    top: { style: 'thin' }, left: { style: 'thin' },
+                    bottom: { style: 'thin' }, right: { style: 'thin' }
+                };
+            });
+        });
+
+        // Verrouillage de la première ligne
+        sheet.views = [ { state: 'frozen', xSplit: 0, ySplit: 1 } ]; 
+    });
+
+    // --- GÉNÉRATION ET TÉLÉCHARGEMENT ---
+    try {
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `Saisie_Notes_${matiereNom.replace(/[\s\/]+/g, '_')}.xlsx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error("Erreur lors de la génération Excel :", error);
+        alert("Une erreur est survenue lors de la création du fichier Excel.");
+    }
+};
 // ----------------------
 </script>
 
