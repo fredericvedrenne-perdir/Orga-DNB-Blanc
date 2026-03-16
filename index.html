@@ -4139,7 +4139,7 @@ window.exportConvocationStudents = function(targetId = null) {
             let body = [];
             DB.exams.forEach(exam => {
                 const dateObj = new Date(exam.date + "T12:00:00");
-                const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+                const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year: 'numeric' });
                 
                 const slotType = isStudentTT ? 'tt' : 'std';
                 let finalStart = isStudentTT ? (exam.timeTT || exam.time) : exam.time;
@@ -7100,7 +7100,7 @@ window.exportConvocationTeachers = function() {
         let body = teacherSurveillances
             .sort((a,b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
             .map(s => [
-                new Date(s.date).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'}),
+                new Date(s.date).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year: 'numeric'}),
                 s.start,
                 s.end,
                 s.name,
