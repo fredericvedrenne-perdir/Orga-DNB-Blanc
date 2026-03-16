@@ -723,6 +723,7 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
 								<button class="btn btn-dark" onclick="exportStudentsToExcel()">📊 Export Elèves et anonymat en Excel</button>
                                 <button class="btn btn-dark" onclick="exportAnonymityList()">📜 Liste Secrétariat</button>
                                 <button class="btn btn-dark" onclick="openLabelConfig('anonymat')">✂️ Étiquettes Copies</button>
+								<button class="btn btn-dark" onclick="exportCouponsAmenagementsPDF()">🖨️ Coupons de Copies (Aménagements)</button>
                             </div>
     </div><div class="action-bar" id="actions-students" style="margin-top:15px; display:flex; justify-content:space-between;"><button class="btn btn-success" onclick="openStudentModal()">➕ Ajouter élève</button><button class="btn btn-danger" onclick="DB.students=[];renderStudents()">Vider</button></div><div style="height:400px;overflow:auto;margin-top:10px;border:1px solid #eee"><table id="tableStudents"><thead>
     <tr>
@@ -2623,13 +2624,17 @@ function renderGrades() {
         const noteHGCalcul = getNoteHGEMC(s); 
         
         let sc = 0, c = 0;
-        if(g.svt != null) { sc += g.svt; c++; }
-        if(g.pc != null) { sc += g.pc; c++; }
-        if(g.tech != null) { sc += g.tech; c++; }
+        if(g.svt != null) { sc += parseFloat(g.svt); c++; }
+        if(g.pc != null) { sc += parseFloat(g.pc); c++; }
+        if(g.tech != null) { sc += parseFloat(g.tech); c++; }
         const moySci = c > 0 ? (sc / c).toFixed(1) : '-';
 
-        const gradesList = [g.fr, g.math, noteHGCalcul, c > 0 ? parseFloat(moySci) : null].filter(v => v !== null);
-        const moyDNB = gradesList.length > 0 ? (gradesList.reduce((a, b) => a + b, 0) / gradesList.length).toFixed(1) : '-';
+        // CORRECTION : v != null permet de filtrer à la fois null ET undefined
+        const gradesList = [g.fr, g.math, noteHGCalcul, c > 0 ? parseFloat(moySci) : null].filter(v => v != null && !isNaN(v));
+        
+        const moyDNB = gradesList.length > 0 
+            ? (gradesList.reduce((a, b) => parseFloat(a) + parseFloat(b), 0) / gradesList.length).toFixed(1) 
+            : '-';
 
         let hgSpecificCells = DB.config.splitHGEMC 
             ? `<td>${g.hg ?? '-'}</td><td>${g.emc ?? '-'}</td>`
@@ -2645,7 +2650,7 @@ function renderGrades() {
             <td>${g.fr ?? '-'}</td>
             <td>${g.math ?? '-'}</td>
             ${hgSpecificCells}
-            <td style="background:#fcf3cf; font-weight:bold;">${noteHGCalcul !== null ? noteHGCalcul.toFixed(1) : '-'}</td>
+            <td style="background:#fcf3cf; font-weight:bold;">${noteHGCalcul != null ? parseFloat(noteHGCalcul).toFixed(1) : '-'}</td>
             <td>${g.svt ?? '-'}</td>
             <td>${g.pc ?? '-'}</td>
             <td>${g.tech ?? '-'}</td>
@@ -5219,21 +5224,47 @@ window.generateLabelsEngine = function(params) {
 
     if (items.length === 0) return alert("Rien à générer.");
 
-    // 3. Configuration Grille
+// 3. Configuration Grille
     let nbCols = 2;
     let nbRows = 8;
-    if (params.mode === 'CUSTOM') {
+    let pageW = 210;
+    let pageH = 297;
+    
+    let m = 10; 
+    // NOUVEAU : on ajoute gapY
+    let boxW, boxH, marginX, marginY, gapX, gapY;
+
+    if (params.mode === 'DNB') {
+        nbCols = 2;
+        nbRows = 8;
+        boxW = 99;         
+        boxH = 33.9;       
+        marginX = 4.5;     
+        marginY = 12.9;    // Si tout est trop haut dès le début, essayez 13.5 ou 14 ici
+        gapX = 3;          
+        gapY = 0;          // NOUVEAU : Marge verticale. S'il y a un décalage progressif, mettez 0.5 ou 1 ici
+        
+        m = 4.5;           
+    } else if (params.mode === 'CUSTOM') {
         nbCols = parseInt(params.custom.cols) || 2;
         nbRows = parseInt(params.custom.rows) || 8;
+        
+        boxW = (pageW - (2 * m)) / nbCols;
+        boxH = (pageH - (2 * m)) / nbRows;
+        marginX = m;
+        marginY = m;
+        gapX = 0;          
+        gapY = 0;
+    } else {
+        boxW = (pageW - (2 * m)) / nbCols;
+        boxH = (pageH - (2 * m)) / nbRows;
+        marginX = m;
+        marginY = m;
+        gapX = 0;
+        gapY = 0;
     }
 
-    const m = 10; 
-    const pageW = 210;
-    const pageH = 297;
-    const boxW = (pageW - (2 * m)) / nbCols;
-    const boxH = (pageH - (2 * m)) / nbRows;
     const perPage = nbCols * nbRows;
-
     let idxPage = 0;
 
     // Nettoyage des breaks inutiles à la fin
@@ -5257,10 +5288,13 @@ window.generateLabelsEngine = function(params) {
             doc.line(m-2, pageH-m, m, pageH-m); doc.line(pageW-m, pageH-m, pageW-m+2, pageH-m);
         }
 
-        const col = idxPage % nbCols;
+const col = idxPage % nbCols;
         const row = Math.floor((idxPage % perPage) / nbCols);
-        const x = m + (col * boxW);
-        const y = m + (row * boxH);
+        
+        // NOUVEAU CALCUL : Intègre le gapX (horizontal) et le gapY (vertical)
+        const x = marginX + (col * (boxW + gapX)); 
+        const y = marginY + (row * (boxH + gapY)); 
+        
         const cutX = x + (boxW * 0.5); 
         const s = item.student;
 
@@ -9983,7 +10017,9 @@ window.renderLotsResult = function(subj) {
     <div style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; background: #e8f8f5; padding: 15px; border-radius: 8px; border: 1px solid #1abc9c; margin-bottom: 10px;">
         <h4 style="margin: 0; color: #16a085;">✅ Répartition terminée (${lots.length} lots)</h4>
         <div style="display: flex; gap: 15px;">
-            <button class="btn btn-success" onclick="exportCorrectionsPDF('${subj}')" style="font-size: 1rem; padding: 10px 20px; box-shadow: 0 4px 6px rgba(46, 204, 113, 0.3);">
+            <button class="btn btn-dark" onclick="exportPochettesCorrecteursPDF('${subj}')" style="font-size: 1rem; padding: 10px 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);">
+    📁 Pochettes Correcteurs (A3)
+</button><button class="btn btn-success" onclick="exportCorrectionsPDF('${subj}')" style="font-size: 1rem; padding: 10px 20px; box-shadow: 0 4px 6px rgba(46, 204, 113, 0.3);">
                 📄 Bordereaux (PDF)
             </button>
             <button class="btn btn-primary" onclick="exportCorrectionsExcel('${subj}')" style="font-size: 1rem; padding: 10px 20px; background-color: #27ae60; border-color: #2ecc71; box-shadow: 0 4px 6px rgba(39, 174, 96, 0.3);">
@@ -10029,8 +10065,12 @@ window.exportCorrectionsPDF = function(subj) {
 
     // Dictionnaire pour les noms de matières
     const subjectNames = {
-        'fr': 'Français', 'math': 'Mathématiques', 'hg': 'Histoire-Géographie / EMC',
-        'svt': 'SVT', 'pc': 'Physique-Chimie', 'tech': 'Technologie'
+        'fr': 'Français',
+        'math': 'Mathématiques',
+        'hg': 'Histoire-Géographie / EMC',
+        'svt': 'SVT',
+        'pc': 'Physique-Chimie',
+        'tech': 'Technologie'
     };
     const matiereNom = subjectNames[subj] || subj;
 
@@ -10045,7 +10085,7 @@ window.exportCorrectionsPDF = function(subj) {
         doc.setFontSize(18);
         doc.setTextColor(41, 128, 185);
         doc.text(`BORDEREAU DE CORRECTION - DNB BLANC`, 105, 20, { align: "center" });
-        
+
         doc.setFontSize(14);
         doc.setTextColor(44, 62, 80);
         doc.text(`Matière : ${matiereNom}`, 105, 30, { align: "center" });
@@ -10056,13 +10096,13 @@ window.exportCorrectionsPDF = function(subj) {
 
         // --- CONFIGURATION DYNAMIQUE DU TABLEAU SELON LA MATIÈRE ---
         let tableHead, tableBody, colStyles;
-
+        
         if (subj === 'hg') {
             // Spécificité Histoire-Géographie / EMC (5 colonnes avec notes sur 20)
             tableHead = [['N°', 'Code Anonymat', 'Note HG / 20', 'Note EMC / 20', 'Observations']];
             tableBody = prof.copies.map((c, i) => [
-                (i + 1).toString(), 
-                c.anonymat, 
+                (i + 1).toString(),
+                c.anonymat,
                 "", // Case vide HG
                 "", // Case vide EMC
                 ""  // Case vide Observations
@@ -10078,8 +10118,8 @@ window.exportCorrectionsPDF = function(subj) {
             // Cas général pour les autres matières (4 colonnes avec note sur 20)
             tableHead = [['N°', 'Code Anonymat', 'Note Globale / 20', 'Observations / Absences']];
             tableBody = prof.copies.map((c, i) => [
-                (i + 1).toString(), 
-                c.anonymat, 
+                (i + 1).toString(),
+                c.anonymat,
                 "", 
                 ""
             ]);
@@ -10102,8 +10142,26 @@ window.exportCorrectionsPDF = function(subj) {
             styles: { fontSize: 11, cellPadding: 4, minCellHeight: 10 }
         });
 
-        // Pied de page
+        // --- NOUVEAU : ZONE DE SIGNATURE ---
         const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
+        let finalY = doc.lastAutoTable.finalY + 15;
+        
+        // Si le tableau arrive tout en bas, on crée une nouvelle page pour la signature
+        if (finalY + 40 > pageHeight) {
+            doc.addPage();
+            finalY = 20;
+        }
+
+        // Titre et cadre de la signature
+        doc.setFontSize(11);
+        doc.setTextColor(44, 62, 80);
+        doc.text("Signature du correcteur :", 130, finalY);
+        
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineWidth(0.5);
+        doc.rect(130, finalY + 4, 65, 25); // Dessine un rectangle (x, y, largeur, hauteur)
+
+        // Pied de page
         doc.setFontSize(9);
         doc.setTextColor(150);
         doc.text(`Ce bordereau est à restituer au secrétariat avec les copies corrigées.`, 105, pageHeight - 10, { align: "center" });
@@ -10774,6 +10832,219 @@ window.renderAnalyseCorrections = function() {
         ${classAvgsHtml}
         ${tableHtml}
     `;
+};
+
+// --- FONCTIONS MANQUANTES CORRIGÉES ---
+function importMissingLabels() {
+    if (!DB.config.labels || DB.config.labels.length === 0) {
+        DB.config.labels = JSON.parse(JSON.stringify(DEFAULT_LABELS));
+    }
+}
+
+function findStudentSecure(nom, prenom, classe, ano) {
+    nom = nom ? String(nom).toUpperCase().trim() : "";
+    prenom = prenom ? String(prenom).trim() : "";
+    ano = ano ? String(ano).trim() : "";
+    
+    // 1. Recherche prioritaire par numéro d'anonymat
+    if (ano) {
+        const s = DB.students.find(st => st.anonymat === ano);
+        if (s) return s;
+    }
+    
+    // 2. Sinon, recherche par nom et prénom
+    return DB.students.find(st => st.nom === nom && (!prenom || st.prenom === prenom)) || null;
+}
+
+window.exportPochettesCorrecteursPDF = function(subj) {
+    const lots = DB.corrections.lots[subj];
+    if (!lots || lots.length === 0) return alert("Aucun lot à exporter.");
+
+    const subjectNames = {
+        'fr': 'Français',
+        'math': 'Mathématiques',
+        'hg': 'Histoire-Géographie / EMC',
+        'svt': 'SVT',
+        'pc': 'Physique-Chimie',
+        'tech': 'Technologie'
+    };
+    const matiereNom = subjectNames[subj] || subj;
+    const year = DB.config.year || new Date().getFullYear();
+    const schoolName = DB.config.schoolName || "Établissement";
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a3');
+    
+    const PG_H = 297;
+    const HALF_W = 210;
+    const M = 15;
+    
+    lots.forEach((prof, idx) => {
+        if (idx > 0) doc.addPage("a3", "l");
+        
+        // RECTO (Partie droite de la feuille A3 paysage)
+        const covX = HALF_W + M;
+        const covW = HALF_W - (2*M);
+        const covCenterX = covX + (covW/2);
+
+       
+
+        // En-tête
+        if (typeof addSmartLogo === "function") {
+            addSmartLogo(doc, covX, 15, 45);
+        }
+
+        doc.setFontSize(18);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0);
+        doc.text(schoolName, covX + 65, 25);
+
+        doc.setFontSize(28);
+        doc.setTextColor(44, 62, 80);
+        doc.text("POCHETTE DE CORRECTION", covCenterX, 90, {align:'center'});
+
+        doc.setFontSize(20);
+        doc.text(`DNB BLANC - SESSION ${year}`, covCenterX, 105, {align:'center'});
+
+        // Cadre info correcteur
+        doc.setDrawColor(44, 62, 80);
+        doc.setLineWidth(1.5);
+        doc.rect(covX + 20, 130, covW - 40, 80);
+
+        doc.setFontSize(24);
+        doc.setTextColor(41, 128, 185);
+        doc.text(`${matiereNom}`, covCenterX, 150, {align:'center'});
+
+// --- AJUSTEMENT DYNAMIQUE DE LA TAILLE DU NOM ---
+        let nameFontSize = 30;
+        doc.setFontSize(nameFontSize);
+        
+        // On calcule la largeur que prendra le nom avec la police actuelle
+        let nameWidth = doc.getTextWidth(prof.name);
+        const maxNameWidth = covW - 50; // Largeur du cadre (covW-40) moins une petite marge de sécurité (10)
+
+        // Si le texte est trop grand, on réduit la taille proportionnellement
+        if (nameWidth > maxNameWidth) {
+            nameFontSize = Math.floor(nameFontSize * (maxNameWidth / nameWidth));
+            
+            // Sécurité : on s'assure que la police ne devient pas non plus minuscule
+            if (nameFontSize < 12) nameFontSize = 12; 
+            
+            doc.setFontSize(nameFontSize);
+        }
+
+        doc.setTextColor(0);
+        doc.text(`${prof.name}`, covCenterX, 175, {align:'center'});
+
+        doc.setFontSize(22);
+        doc.setTextColor(231, 76, 60);
+        doc.text(`Nombre de copies : ${prof.copies.length}`, covCenterX, 195, {align:'center'});
+
+        // Consignes pour le correcteur (Optionnel)
+        doc.setFontSize(12);
+        doc.setTextColor(100);
+        doc.setFont("helvetica", "normal");
+        const consignes = "Veuillez corriger les copies contenues dans cette pochette.\nSaisissez ensuite les notes sur le fichier Excel envoyé via Pronote.\nRestituez cette pochette avec les copies corrigées et le bordereau de notation au secrétariat.";
+        doc.text(consignes, covCenterX, 240, {align:'center', maxWidth: covW - 20});
+    });
+
+    doc.save(`Pochettes_Correction_${matiereNom.replace(/[\s\/]+/g, '_')}.pdf`);
+};
+
+// =========================================================
+// === EXPORT COUPONS AMÉNAGEMENTS DE TABLE (VIERGES) ===
+// =========================================================
+window.exportCouponsAmenagementsPDF = function() {
+    if (!window.jspdf) return alert("Erreur : La librairie jsPDF n'est pas chargée.");
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4'); 
+    doc.setProperties({ title: "Coupons_Amenagements_Vierges.pdf" });
+
+    const year = DB.config.year || new Date().getFullYear();
+
+    // Configuration de la page (4 coupons génériques par page)
+    const couponsPerPage = 4;
+    const pageW = 210;
+    const pageH = 297;
+    const couponH = pageH / couponsPerPage; // ~74.25 mm par coupon
+
+    // Textes de vos aménagements par défaut
+    const amenagementsTypes = [
+        "Copie rédigée sur ordinateur",
+        "Dictée aménagée",
+		"Non prise en compte de la qualité rédactionnelle dont l’orthographe",
+        "Dispense de l’exercice de tâche cartographique – épreuve Histoire-Géographie",
+        "Neutralisation de l’exercice d’algorithmique - épreuve de mathématiques"
+    ];
+
+    // On boucle simplement 4 fois pour remplir la page A4
+    for (let i = 0; i < couponsPerPage; i++) {
+        const startY = i * couponH;
+
+        // 1. Ligne de découpe (pointillés)
+        if (i > 0) {
+            doc.setDrawColor(150);
+            doc.setLineWidth(0.3);
+            doc.setLineDash([3, 3], 0);
+            doc.line(0, startY, pageW, startY);
+            doc.setLineDash([]);
+            doc.setFontSize(12);
+            doc.setTextColor(150);
+            doc.text("✂", 5, startY + 1.5);
+        }
+
+        // 2. Logo de l'établissement
+        if (typeof addSmartLogo === "function") {
+            addSmartLogo(doc, 15, startY + 5, 20);
+        }
+
+        // 3. En-tête officiel
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(44, 62, 80);
+        doc.text(`DNB BLANC - SESSION ${year}`, 105, startY + 12, { align: 'center' });
+        
+        doc.setFontSize(15);
+        doc.setTextColor(41, 128, 185);
+        doc.text("AMÉNAGEMENTS D'ÉPREUVES", 105, startY + 19, { align: 'center' });
+
+        // 4. Liste des cases à cocher (répartie sur toute la largeur)
+        const checkX = 25; // Marge gauche pour la liste
+        let checkY = startY + 32; // On démarre un peu plus bas
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(0);
+
+        amenagementsTypes.forEach((texte) => {
+            // Dessin de la case à cocher vide
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.3);
+            doc.rect(checkX, checkY - 3, 4, 4);
+
+            // Texte de l'aménagement
+            doc.text(texte, checkX + 8, checkY, { maxWidth: 165 });
+            
+            // Calcul de l'espacement pour la ligne suivante (au cas où le texte prend 2 lignes)
+            const textLines = doc.splitTextToSize(texte, 165);
+            checkY += (textLines.length * 4) + 3.5; 
+        });
+
+        // La ligne "Autre"
+        doc.rect(checkX, checkY - 3, 4, 4);
+        doc.setFont("helvetica", "bold");
+        doc.text("Autre(s) :", checkX + 8, checkY);
+        
+        doc.setDrawColor(150);
+        doc.setLineDash([1, 1], 0);
+        // Ligne pour écrire à la main
+        doc.line(checkX + 26, checkY, 185, checkY); 
+        doc.setLineDash([]);
+    }
+
+    // Sauvegarde d'un fichier unique d'une page
+    doc.save(`Coupons_Amenagements_Vierges_${year}.pdf`);
 };
 // ----------------------
 </script>
