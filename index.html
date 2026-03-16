@@ -685,6 +685,7 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
                                 <div style="font-size:1.5rem;">👩‍💼</div>
                                 <div style="font-size:0.85rem; margin-top:5px;">Mme la Principale Adjointe</div>
                             </div>
+							
                         </div>
 
                     </div>
@@ -7019,113 +7020,114 @@ function addMinutesObj(time, mins) {
 }
 
 
+/**
+ * Génère les convocations PDF pour les professeurs.
+ * Correction : Ajout du calcul systématique de l'heure de fin pour les épreuves non découpées.
+ */
 window.exportConvocationTeachers = function() {
-    DB.config.schoolName = document.getElementById('schoolName').value;
-    DB.config.year = document.getElementById('sessionYear').value;
-    if (!DB.config.director) DB.config.director = { civ: "M. le Principal", name: "" };
-    
-    const textAreaEl = document.getElementById('txtConvocProfsInfo');
-    const notePourProfs = textAreaEl ? textAreaEl.value.trim() : "";
-    
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4');
-    let count = 0;
+    const customText = document.getElementById('txtConvocProfsInfo').value;
+    const schoolName = DB.config.schoolName || "Établissement";
+    const year = DB.config.year || new Date().getFullYear();
     
-    DB.teachers.forEach(teacher => {
+    let teacherCount = 0;
+
+    // On trie les profs par nom pour faciliter la distribution physique
+    const sortedTeachers = [...DB.teachers].sort((a, b) => a.nom.localeCompare(b.nom));
+
+    sortedTeachers.forEach((teacher) => {
         const fullName = `${teacher.nom} ${teacher.prenom}`;
-        let duties = [];
-        
-        for (const [key, assignedName] of Object.entries(DB.planning)) {
-            if (assignedName !== fullName) continue;
-            const parts = key.split('_');
-            if (parts.length < 5) continue; 
-            const examIdx = parseInt(parts[0]);
-            const roomName = parts[1];
-            const type = parts[2];
-            const slotIdx = parseInt(parts[3]);
-            const exam = DB.exams[examIdx];
-            
-            let slot = { start: "??", end: "??" };
-            if(exam.slots && exam.slots[type] && exam.slots[type][slotIdx]) {
-                slot = exam.slots[type][slotIdx];
-            } else {
-                 slot = { start: type==='tt'? (exam.timeTT||exam.time):exam.time, end: "..." };
+        let teacherSurveillances = [];
+
+        // 1. On scanne tout le planning pour trouver les surveillances de ce prof
+        Object.keys(DB.planning).forEach(key => {
+            if (DB.planning[key] === fullName) {
+                const [examIdx, roomName, type, slotIdx] = key.split('_');
+                const exam = DB.exams[parseInt(examIdx)];
+                
+                // Récupération de l'heure de début et de fin
+                let startTime = "";
+                let endTime = "";
+
+                // LOGIQUE CORRIGÉE : Si l'épreuve a des créneaux (découpée)
+                if (exam.slots && exam.slots[type] && exam.slots[type][slotIdx]) {
+                    startTime = exam.slots[type][slotIdx].start;
+                    endTime = exam.slots[type][slotIdx].end;
+                } else {
+                    // LOGIQUE CORRIGÉE : Épreuve non découpée (Bloc unique)
+                    startTime = (type === 'tt' && exam.timeTT) ? exam.timeTT : exam.time;
+                    const duration = (type === 'tt') ? exam.durTT : exam.durStd;
+                    // On appelle la fonction utilitaire existante pour calculer la fin
+                    endTime = addMinutes(startTime, parseInt(duration));
+                }
+
+                teacherSurveillances.push({
+                    date: exam.date,
+                    name: exam.name,
+                    room: roomName,
+                    start: startTime,
+                    end: endTime
+                });
             }
-            duties.push({ date: exam.date, start: slot.start, end: slot.end, name: exam.name, room: roomName, isTT: (type === 'tt') });
-        }
+        });
 
-        if(duties.length === 0) return;
-        if(count > 0) doc.addPage(); count++;
+        // 2. Si le prof n'a aucune surveillance, on ne génère pas de page pour lui
+        if (teacherSurveillances.length === 0) return;
 
-        addSmartLogo(doc, 15, 10, 45);
-        doc.setFontSize(10); doc.setTextColor(100); doc.text("DNB BLANC", 195, 12, {align:'right'}); doc.text(`Session ${DB.config.year}`, 195, 17, {align:'right'});
-        doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'});
-        doc.setFontSize(18); doc.setTextColor(0); doc.text("CONVOCATION SURVEILLANCE", 105, 40, {align:'center'});
+        if (teacherCount > 0) doc.addPage();
+        teacherCount++;
 
-        doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.rect(15, 50, 180, 20, 'FD');
-        doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); doc.text(`${teacher.civ || ""} ${fullName}`, 20, 62);
+        // --- Mise en page de la convocation ---
+        if (typeof addSmartLogo === 'function' && DB.config.logo) addSmartLogo(doc, 15, 10, 40);
         
-        doc.setFontSize(11); doc.setFont("helvetica","normal"); doc.text("Planning de vos créneaux de surveillance :", 15, 85);
+        doc.setFontSize(10).setTextColor(100);
+        doc.text("DNB BLANC", 195, 15, {align:'right'});
+        doc.text(`Session ${year}`, 195, 20, {align:'right'});
 
-        duties.sort((a,b) => {
-            const dateComp = a.date.localeCompare(b.date);
-            if(dateComp !== 0) return dateComp;
-            return a.start.localeCompare(b.start);
-        });
+        doc.setFontSize(14).setTextColor(44,62,80).setFont("helvetica","bold");
+        doc.text(schoolName, 105, 18, {align:'center'});
 
-        const bodyTable = duties.map(d => {
-            const dateObj = new Date(d.date + "T12:00:00");
-            const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' });
-            return [ dateStr, `${d.start} - ${d.end}`, d.name + (d.isTT ? " (TT)" : ""), d.room ];
-        });
+        doc.setFontSize(18).setTextColor(0);
+        doc.text("CONVOCATION SURVEILLANCE", 105, 35, {align:'center'});
+
+        // Bloc Identité
+        doc.setDrawColor(44,62,80).setLineWidth(0.5).rect(15, 45, 180, 15);
+        doc.setFontSize(12).text(`Destinataire : ${teacher.civ} ${fullName}`, 20, 54);
+
+        // Tableau des surveillances
+        let body = teacherSurveillances
+            .sort((a,b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
+            .map(s => [
+                new Date(s.date).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'}),
+                s.start,
+                s.end,
+                s.name,
+                s.room
+            ]);
 
         doc.autoTable({
-            head: [['Date', 'Créneau', 'Épreuve', 'Salle']], 
-            body: bodyTable, 
-            startY: 90, 
+            head: [['Date', 'Début', 'Fin', 'Épreuve', 'Salle']],
+            body: body,
+            startY: 70,
             theme: 'grid',
-            headStyles: { fillColor: [44,62,80] }, 
-            styles: { cellPadding: 3, valign: 'middle', fontSize: 10 },
-            columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35, fontStyle:'bold' }, 3: { cellWidth: 25, halign:'center' } }
+            headStyles: { fillColor: [44, 62, 80] },
+            columnStyles: { 
+                1: { halign: 'center' }, 
+                2: { halign: 'center', fontStyle: 'bold' } 
+            }
         });
 
-        // --- INSERTION DU TEXTE SANS TITRE ---
-        let yApresTableau = doc.lastAutoTable.finalY + 12;
-
-        if (notePourProfs !== "") {
-            if (yApresTableau > 250) { doc.addPage(); yApresTableau = 25; }
-
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "normal"); // Texte simple, pas de gras
-            doc.setTextColor(0);
-            
-            const lignesTexte = doc.splitTextToSize(notePourProfs, 180);
-            // On écrit le texte directement à la position yApresTableau
-            doc.text(lignesTexte, 15, yApresTableau);
-            
-            yApresTableau += (lignesTexte.length * 6) + 12;
-        }
-
-        // --- SIGNATURE ---
-        let ySignature = yApresTableau;
-        if(ySignature > 260) { doc.addPage(); ySignature = 30; }
-
-        doc.setFontSize(11); 
-        doc.text(`Fait à ${DB.config.city || "SJI"}, le ${new Date().toLocaleDateString()}`, 140, ySignature, {align:'center'});            
-        doc.setFont("helvetica","bold"); 
-        doc.text(DB.config.director.civ || "Le Chef", 140, ySignature + 7, {align:'center'});
-        doc.text(DB.config.director.name || "", 140, ySignature + 14, {align:'center'});
-
-        if(DB.config.signature) { 
-             try {
-                const propsImg = doc.getImageProperties(DB.config.signature);
-                const ratioImg = propsImg.width / propsImg.height;
-                doc.addImage(DB.config.signature, 'PNG', 125, ySignature + 18, 25*ratioImg, 25);
-            } catch(e) {}
-        }
+        // Consignes
+        let finalY = doc.lastAutoTable.finalY + 15;
+        doc.setFontSize(11).setFont("helvetica", "bold").text("CONSIGNES :", 15, finalY);
+        doc.setFontSize(10).setFont("helvetica", "normal");
+        const lines = doc.splitTextToSize(customText, 180);
+        doc.text(lines, 15, finalY + 7);
     });
 
-    doc.save("Convocations_Profs.pdf");
+    if (teacherCount === 0) alert("Aucune surveillance n'est encore enregistrée dans le planning.");
+    else doc.save(`Convocations_Professeurs_${year}.pdf`);
 };
 
 
