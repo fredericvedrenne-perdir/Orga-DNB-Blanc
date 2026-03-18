@@ -3067,103 +3067,141 @@ function saveSimuGradeModal(studentId) {
         document.getElementById('printType').value = 'convoc';
     }
 
-    // 4. RELEVÉS DE NOTES (Corrigé, Complet avec Calculs)
+/**
+ * GÉNÉRATION DES RELEVÉS DE NOTES PDF
+ * Pourquoi : Produit un document officiel pour chaque élève avec calcul automatique des moyennes.
+ */
 window.exportRelevesNotes = function(sortMode, targetId) {
-    DB.config.schoolName = document.getElementById('schoolName').value; 
-    DB.config.year = document.getElementById('sessionYear').value;
-    const activeSciences = DB.config.scienceSubjects || ['SVT', 'PC', 'TECH'];
-    const { jsPDF } = window.jspdf; 
-    const doc = new jsPDF('p', 'mm', 'a4'); 
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
     let count = 0;
-    
+
+    // Récupération des infos globales
+    const schoolName = document.getElementById('schoolName')?.value || "Établissement";
+    const sessionYear = document.getElementById('sessionYear')?.value || "2026";
+    const city = DB.config.city || "votre ville";
+
     let studentsToPrint = (targetId && targetId !== 'all') 
         ? DB.students.filter(s => s.id == targetId) 
         : [...DB.students];
-    
-    studentsToPrint.sort((a,b) => { 
-        if(sortMode === 'class') { 
-            if(a.classe < b.classe) return -1; 
-            if(a.classe > b.classe) return 1; 
-        } 
-        return a.nom.localeCompare(b.nom); 
+
+    // Tri
+    studentsToPrint.sort((a,b) => {
+        if(sortMode === 'class') {
+            if((a.classe||"") < (b.classe||"")) return -1;
+            if((a.classe||"") > (b.classe||"")) return 1;
+        }
+        return (a.nom||"").localeCompare(b.nom||"");
     });
 
     studentsToPrint.forEach((student) => {
-        if(!student.grades) student.grades = {}; 
-        if(count > 0) doc.addPage(); count++;
-        
-        if (DB.config.logo) addSmartLogo(doc, 15, 10, 40);
+        if (count > 0) doc.addPage();
+        count++;
 
-        doc.setFontSize(10); doc.setTextColor(100); 
-        doc.text("DNB BLANC", 195, 15, {align:'right'}); 
-        doc.text(`Session ${DB.config.year}`, 195, 20, {align:'right'});
-        
-        doc.setFontSize(14); doc.setTextColor(44,62,80); doc.setFont("helvetica","bold"); 
-        doc.text(DB.config.schoolName || "Collège", 105, 18, {align:'center'}); 
-        doc.setFontSize(18); doc.setTextColor(0); doc.text("RELEVÉ DE NOTES", 105, 35, {align:'center'});
-        
-        doc.setFillColor(248, 249, 250); doc.setDrawColor(44,62,80); doc.setLineWidth(0.5); 
-        doc.rect(15, 75, 180, 20, 'FD'); 
-        doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica","bold"); 
-        doc.text(`Candidat(e) : ${student.nom} ${student.prenom}`, 20, 83); 
-        doc.text(`Classe : ${student.classe}`, 150, 83); 
-        
-        // Fonctions de formatage
-        const getRaw = (v) => (v !== null && v !== undefined && v !== "") ? parseFloat(v) : null;
-        const fmt = (v) => {
-            let val = getRaw(v);
-            return (val !== null) ? val.toFixed(1) + " / 20" : "-";
+        // --- EN-TÊTE ---
+        if (DB.config.logo) {
+            try { doc.addImage(DB.config.logo, 'PNG', 15, 10, 25, 25); } catch(e){}
+        }
+        doc.setFontSize(10); doc.setTextColor(100);
+        doc.text("DNB BLANC", 195, 15, {align:'right'});
+        doc.text(`Session ${sessionYear}`, 195, 20, {align:'right'});
+
+        doc.setFontSize(14); doc.setTextColor(44, 62, 80); doc.setFont("helvetica", "bold");
+        doc.text(schoolName, 105, 22, {align:'center'});
+        doc.setFontSize(18); doc.setTextColor(0);
+        doc.text("RELEVÉ DE NOTES", 105, 38, {align:'center'});
+
+        // --- BLOC CANDIDAT ---
+        doc.setDrawColor(200); doc.setLineWidth(0.2);
+        doc.rect(15, 48, 180, 18);
+        doc.setFontSize(12);
+        doc.text(`Candidat(e) : ${student.nom.toUpperCase()} ${student.prenom}`, 20, 59);
+        doc.text(`Classe : ${student.classe || "N/C"}`, 155, 59);
+
+        // --- CALCULS SÉCURISÉS ---
+        const parse = (v) => {
+            let n = parseFloat(v);
+            return (isNaN(n)) ? null : n;
         };
         
-        // --- CALCUL SCIENCES ---
-        let sumSci=0, cSci=0; let detSci=[];
-        if(activeSciences.includes('SVT')){ 
-            let v = getRaw(student.grades.svt); if(v!==null){ sumSci+=v; cSci++; }
-            detSci.push(`SVT: ${fmt(student.grades.svt)}`); 
-        }
-        if(activeSciences.includes('PC')){ 
-            let v = getRaw(student.grades.pc); if(v!==null){ sumSci+=v; cSci++; }
-            detSci.push(`PC: ${fmt(student.grades.pc)}`); 
-        }
-        if(activeSciences.includes('TECH')){ 
-            let v = getRaw(student.grades.tech); if(v!==null){ sumSci+=v; cSci++; }
-            detSci.push(`Techno: ${fmt(student.grades.tech)}`); 
-        }
-        const noteSci20 = cSci > 0 ? (sumSci / cSci).toFixed(1) : "Abs";
-
-        // --- CALCUL HG-EMC (CORRIGÉ) ---
-        const resHG = getDetailHGEMC(student); // Utilisation de la fonction globale de calcul
-        const noteHG20 = resHG.average !== null ? resHG.average.toFixed(1) : "Abs";
-        let detHG = resHG.detail || "Épreuve unique";
-
-        const body = [ 
-            ["Français", (getRaw(student.grades.fr) !== null ? getRaw(student.grades.fr).toFixed(1) + " / 20" : "Abs"), "Épreuve unique"], 
-            ["Mathématiques", (getRaw(student.grades.math) !== null ? getRaw(student.grades.math).toFixed(1) + " / 20" : "Abs"), "Épreuve unique"], 
-            ["Hist-Géo / EMC", (noteHG20 !== "Abs" ? noteHG20 + " / 20" : "Abs"), detHG], 
-            ["Sciences", (noteSci20 !== "Abs" ? noteSci20 + " / 20" : "Abs"), detSci.join(' | ')] 
-        ];
+        const nFR = parse(student.grades?.fr);
+        const nMA = parse(student.grades?.math);
         
-        doc.autoTable({ 
-            head: [['Épreuves', 'Note', 'Détail des notes']], 
-            body: body, 
-            startY: 105, 
-            theme: 'grid', 
-            headStyles: { fillColor: [44,62,80] },
-            columnStyles: { 
-                1: { halign: 'center', fontStyle: 'bold', cellWidth: 40 }, 
-                2: { fontSize: 9, cellWidth: 'auto' } 
-            }
+        // HG-EMC : Gestion du NaN spécifique
+        let nHG = null, detailHG = "HG: - | EMC: -";
+        if (typeof getDetailHGEMC === "function") {
+            const resHG = getDetailHGEMC(student);
+            nHG = parse(resHG.average);
+            detailHG = resHG.detail.replace(/NaN/g, "-"); // Nettoyage visuel
+        }
+
+        // Sciences
+        const sciKeys = DB.config.scienceSubjects || ['svt', 'pc', 'tech'];
+        let sSum = 0, sCount = 0;
+        let detSci = [];
+        sciKeys.forEach(k => {
+            let val = parse(student.grades?.[k.toLowerCase()]);
+            if(val !== null) { sSum += val; sCount++; detSci.push(`${k.toUpperCase()}: ${val.toFixed(1)}`); }
+            else { detSci.push(`${k.toUpperCase()}: -`); }
         });
+        const nSCI = sCount > 0 ? (sSum / sCount) : null;
+
+        // --- TABLEAU DES NOTES ---
+        const body = [
+            ["Français", nFR !== null ? nFR.toFixed(1) + " / 20" : "Abs", "Épreuve unique"],
+            ["Mathématiques", nMA !== null ? nMA.toFixed(1) + " / 20" : "Abs", "Épreuve unique"],
+            ["Hist-Géo / EMC", nHG !== null ? nHG.toFixed(1) + " / 20" : "0.0 / 20", detailHG],
+            ["Sciences", nSCI !== null ? nSCI.toFixed(1) + " / 20" : "Abs", detSci.join(' | ')]
+        ];
+
+        doc.autoTable({
+            startY: 75,
+            head: [['Épreuves', 'Note / 20', 'Détails des notes']],
+            body: body,
+            theme: 'grid',
+            headStyles: { fillColor: [44, 62, 80], halign: 'center' },
+            styles: { fontSize: 10, cellPadding: 4 },
+            columnStyles: { 1: { halign: 'center', fontStyle: 'bold', cellWidth: 35 } }
+        });
+
+        // --- MOYENNE GÉNÉRALE ---
+        let finalY = doc.lastAutoTable.finalY + 15;
+        const validNotes = [nFR, nMA, nHG, nSCI].filter(v => v !== null);
+        const moyGen = validNotes.length > 0 
+            ? (validNotes.reduce((a,b)=>a+b,0) / validNotes.length).toFixed(2) 
+            : "0.00";
+
+        doc.setFontSize(13); doc.setFont("helvetica", "bold");
+        doc.text(`MOYENNE GÉNÉRALE DNB BLANC : ${moyGen} / 20`, 105, finalY, {align:'center'});
+
+        // --- BLOC SIGNATURE ---
+        finalY += 20;
+        doc.setFontSize(10); doc.setFont("helvetica", "normal");
+        doc.text(`Fait à ${city}, le ${new Date().toLocaleDateString()}`, 130, finalY);
         
-        let finalY = doc.lastAutoTable.finalY + 25; 
-        if(finalY > 250) { doc.addPage(); finalY = 40; }
-        doc.setFontSize(11); doc.text(`Fait à ${DB.config.city || ""}, le ${new Date().toLocaleDateString()}`, 130, finalY, {align:'center'});            
-        doc.setFont("helvetica","bold"); doc.text(DB.config.director.civ || "Le Chef d'Établissement", 130, finalY + 5, {align:'center'}); 
-        doc.text(DB.config.director.name || "", 130, finalY + 10, {align:'center'});
-        
-        if(DB.config.signature) { try { doc.addImage(DB.config.signature, 'PNG', 110, finalY + 15, 40, 20); } catch(e) {} }
+        finalY += 8;
+        doc.setFont("helvetica", "bold");
+        doc.text(DB.config.director?.civ || "Le Principal", 130, finalY);
+        doc.text(DB.config.director?.name || "", 130, finalY + 5);
+
+        if (DB.config.signature) {
+            try {
+                // Utilisation de 'CONTAIN' pour ne pas étirer l'image
+                doc.addImage(
+                    DB.config.signature, 
+                    'PNG', 
+                    130,       // X
+                    finalY + 10, // Y (bien après le nom)
+                    45,        // Largeur max
+                    20,        // Hauteur max
+                    undefined, 
+                    'FAST'
+                );
+            } catch(e) { console.error("Signature error:", e); }
+        }
     });
-    doc.save("Releves_Notes_DNB_Blanc.pdf");
+
+    doc.save(`Releves_Notes_DNB_Blanc_${sessionYear}.pdf`);
 };
 
     // --- FONCTION D'AFFICHAGE AVEC FILTRES ET MEF ---
@@ -10069,6 +10107,57 @@ window.generateDistributionLots = function() {
     DB.corrections.lots[subj] = profsArray;
     if(typeof saveDB === 'function') saveDB();
     renderLotsResult(subj);
+};
+
+/**
+ * RENDU DU TABLEAU D'AFFECTATION PAR CLASSE
+ * Pourquoi : Cette fonction manquante génère le tableau permettant d'associer 
+ * une classe entière à un correcteur spécifique.
+ */
+window.renderManualClassTable = function(subj, config) {
+    const tbody = document.getElementById('corrManualClassTbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    // 1. Extraction des classes uniques (on ignore "Non Classé")
+    const classes = [...new Set(DB.students.map(s => s.classe).filter(c => c && c !== "Non Classé"))].sort();
+
+    if (classes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#e67e22;">⚠️ Aucun élève avec une classe n\'a été trouvé.</td></tr>';
+        return;
+    }
+
+    // 2. Génération des lignes
+    classes.forEach(cls => {
+        // Nombre de copies ayant un code d'anonymat dans cette classe
+        const count = DB.students.filter(s => s.classe === cls && s.anonymat).length;
+        
+        // Correcteur déjà enregistré dans la configuration
+        const currentProfId = config.manualMap ? config.manualMap[cls] : "";
+
+        // Construction du menu déroulant des professeurs de l'équipe
+        let options = `<option value="">-- Choisir un correcteur --</option>`;
+        config.teachers.forEach(tc => {
+            const profDb = DB.teachers.find(t => String(t.id) === String(tc.id));
+            if (profDb) {
+                const selected = String(tc.id) === String(currentProfId) ? 'selected' : '';
+                options += `<option value="${tc.id}" ${selected}>${profDb.nom} ${profDb.prenom}</option>`;
+            }
+        });
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight:bold;">📦 Classe : ${cls}</td>
+            <td style="text-align:center;">
+                <span class="badge ${count > 0 ? 'btn-success' : 'btn-danger'}" style="padding:5px 10px;">${count} copies</span>
+            </td>
+            <td>
+                <select class="form-control" onchange="updateManualMap('${subj}', '${cls}', this.value)" style="width:100%; padding:5px;">
+                    ${options}
+                </select>
+            </td>`;
+        tbody.appendChild(tr);
+    });
 };
 
 // RENDU VISUEL DES LOTS + BOUTON PDF
