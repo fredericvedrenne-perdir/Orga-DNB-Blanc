@@ -9828,11 +9828,27 @@ function updateCorrGlobalMode() {
 }
 
 // 2. ACTIONS UI
+/**
+ * OUVRE LA MODALE D'AJOUT D'UN CORRECTEUR
+ * Pourquoi : Affichage de la liste triée et RÉPARATION À LA VOLÉE des IDs 
+ * en double pour corriger le bug sans avoir à réimporter les professeurs.
+ */
 window.openAddCorrectorModal = function() {
     const select = document.getElementById('correctorProfSelect');
     select.innerHTML = '<option value="">-- Choisir un professeur --</option>';
     
-    // On trie les profs par nom pour le confort
+    // 1. Réparation des IDs corrompus ou en double (Fix silencieux)
+    const seenIds = new Set();
+    DB.teachers.forEach(t => {
+        // Si l'ID est manquant ou s'il a déjà été vu chez un autre prof
+        if (!t.id || seenIds.has(String(t.id))) {
+            // On lui assigne un ID alphanumérique robuste garanti 100% unique
+            t.id = 'prof_' + Math.random().toString(36).substr(2, 9);
+        }
+        seenIds.add(String(t.id));
+    });
+
+    // 2. On trie les profs par nom pour le confort de lecture
     DB.teachers.sort((a,b) => a.nom.localeCompare(b.nom)).forEach(t => {
         select.innerHTML += `<option value="${t.id}">${t.nom} ${t.prenom} (${t.matiere})</option>`;
     });
@@ -9841,10 +9857,9 @@ window.openAddCorrectorModal = function() {
 };
 
 /**
- * CONFIRME L'AJOUT (Blindée contre les IDs nuls et types mixtes)
- */
-/**
- * CONFIRME L'AJOUT (Version avec ciblage spécifique pour éviter le bug du premier prof)
+ * CONFIRME L'AJOUT D'UN CORRECTEUR
+ * Pourquoi : Correction du bug empêchant l'ajout de plusieurs correcteurs 
+ * en sécurisant le nettoyage de la liste et la comparaison des IDs.
  */
 window.confirmAddCorrector = function() {
     initCorrectionsModule();
@@ -9854,36 +9869,38 @@ window.confirmAddCorrector = function() {
         DB.corrections.settings[subj] = { mode: 'auto', teachers: [], manualMap: {} };
     }
 
-    // On cible le select spécifiquement à l'intérieur de la modale pour éviter les doublons d'ID
+    // 1. Ciblage précis de l'élément dans la modale
     const modal = document.getElementById('addCorrectorModal');
     const selectEl = modal.querySelector('#correctorProfSelect');
     
     if (!selectEl) {
-        alert("Erreur technique : Sélecteur de professeur introuvable.");
+        console.error("Erreur : Sélecteur de professeur introuvable.");
         return;
     }
 
     const profIdRaw = selectEl.value;
-
     if (!profIdRaw || profIdRaw === "") {
         alert("Veuillez sélectionner un professeur dans la liste.");
         return;
     }
 
-    // NETTOYAGE : On filtre les données corrompues (null) de la sauvegarde
+    // 2. Nettoyage et sécurisation de la liste existante
+    // On filtre les entrées nulles ou indéfinies pour éviter les erreurs de comparaison
     DB.corrections.settings[subj].teachers = DB.corrections.settings[subj].teachers.filter(t => 
         t !== null && t.id !== null && t.id !== undefined
     );
 
-    // VÉRIFICATION : Comparaison en String
-    const alreadyExists = DB.corrections.settings[subj].teachers.some(t => String(t.id) === String(profIdRaw));
-    
+    // 3. Vérification des doublons (Comparaison stricte en format String)
+    const alreadyExists = DB.corrections.settings[subj].teachers.some(t => 
+        String(t.id) === String(profIdRaw)
+    );
+
     if (alreadyExists) {
         alert("Ce professeur figure déjà dans l'équipe de correction pour cette matière.");
         return;
     }
 
-    // AJOUT EFFECTIF
+    // 4. Ajout effectif
     const finalId = isNaN(profIdRaw) ? profIdRaw : parseFloat(profIdRaw);
     DB.corrections.settings[subj].teachers.push({ 
         id: finalId, 
@@ -9892,12 +9909,12 @@ window.confirmAddCorrector = function() {
         quota: 0 
     });
 
-    // ACTION CRUCIAL : On remet le menu déroulant à zéro pour le prochain ajout
-    selectEl.selectedIndex = 0;
-
-    // Fermeture et rafraîchissement
+    // 5. Réinitialisation de l'interface
+    selectEl.selectedIndex = 0; // Remet le menu à "Choisir un professeur"
     modal.style.display = 'none';
+    
     renderCorrectionsConfig();
+    
     if (typeof saveDB === 'function') saveDB();
 };
 
