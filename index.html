@@ -1314,7 +1314,19 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
 		
 		<div id="res-analyse" class="section">
     <div class="card">
-        <div class="card-header-flex">
+       <div class="card" style="border-left: 5px solid var(--success);">
+    <h4>🚀 Import Global des Moyennes Annuelles</h4>
+    <p style="font-size: 0.85rem; color: #666;">
+        Importez un fichier contenant toutes les matières. Le système détectera les colonnes 
+        (ex: "Moyenne Math", "Moy. Français", etc.).
+    </p>
+    <div style="display: flex; gap: 15px; align-items: center;">
+        <input type="file" id="fileGlobalAnnual" accept=".csv, .xlsx" style="display:none" onchange="handleGlobalClassImport()">
+        <button class="btn btn-primary" onclick="document.getElementById('fileGlobalAnnual').click()">📂 Importer le fichier global</button>
+    </div>
+    <div id="importStats" style="margin-top:10px; font-weight:bold; color:var(--info);"></div>
+</div>
+</div><div class="card-header-flex">
             <h3>📊 Analyse Statistique des Corrections</h3>
             <select id="analyseSubjectSelect" onchange="renderAnalyseCorrections()" style="width: 250px; font-weight: bold; color: #2980b9; padding: 8px;">
                 <option value="fr">Français</option>
@@ -10039,12 +10051,34 @@ window.toggleCorrectorClass = function(subj, idx, cls, isChecked) {
     else arr.splice(arr.indexOf(cls), 1);
 };
 window.toggleCorrectorOwn = function(subj, idx, val) { DB.corrections.settings[subj].teachers[idx].allowOwn = val; };
+/**
+ * Met à jour le mapping manuel entre une classe et un correcteur.
+ * Corrigé : Gestion robuste des IDs alphanumériques (ex: "prof_xyz")
+ *
+ * @param {string} subj - La matière concernée
+ * @param {string} cls - Le nom de la classe
+ * @param {string|number} profId - L'identifiant du professeur assigné
+ */
 window.updateManualMap = function(subj, cls, profId) {
-    if(!DB.corrections.settings[subj].manualMap) DB.corrections.settings[subj].manualMap = {};
-    if(profId === "") delete DB.corrections.settings[subj].manualMap[cls];
-    else DB.corrections.settings[subj].manualMap[cls] = parseFloat(profId);
-    if(typeof saveDB === 'function') saveDB();
+    // Sécurisation de l'arborescence des objets
+    if (!DB.corrections.settings[subj].manualMap) {
+        DB.corrections.settings[subj].manualMap = {};
+    }
+    
+    if (profId === "") {
+        // Retrait du correcteur pour la classe ciblée
+        delete DB.corrections.settings[subj].manualMap[cls];
+    } else {
+        // Enregistrement de l'identifiant selon son type (numérique ancien ou alphanumérique moderne)
+        DB.corrections.settings[subj].manualMap[cls] = isNaN(profId) ? profId : parseFloat(profId);
+    }
+    
+    // Persistance dans le localStorage si applicable
+    if (typeof saveDB === 'function') {
+        saveDB();
+    }
 };
+
 window.updateCorrectorQuota = function(subj, idx, val) { 
     DB.corrections.settings[subj].teachers[idx].quota = parseInt(val) || 0; 
     if(typeof saveDB === 'function') saveDB();
@@ -10890,120 +10924,93 @@ window.exportAllGradesExcel = async function() {
 window.renderAnalyseCorrections = function() {
     const subj = document.getElementById('analyseSubjectSelect').value;
     const area = document.getElementById('analyseResultsArea');
+    if(!area) return;
     area.innerHTML = '';
 
-    // Vérification de l'existence des lots
+    // --- PARTIE 1 : ANALYSE DES CORRECTEURS ET MATIÈRE (Votre code existant) ---
+    
     if (!DB.corrections || !DB.corrections.lots || !DB.corrections.lots[subj]) {
-        area.innerHTML = '<div style="padding: 30px; text-align: center; color: #e67e22; background: #fdf2e9; border-radius: 8px; font-weight: bold;">⚠️ Aucune répartition de copies n\'a été générée pour cette matière. Veuillez configurer les lots dans le menu "Corrections".</div>';
-        return;
-    }
+        area.innerHTML = '<div class="alert alert-warning">⚠️ Aucune répartition de copies pour cette matière.</div>';
+    } else {
+        const lots = DB.corrections.lots[subj];
+        let totalSum = 0, totalCount = 0, classData = {};
 
-    const lots = DB.corrections.lots[subj];
-    
-    // 1. CALCULS GLOBAUX ET PAR CLASSE
-    let totalSum = 0, totalCount = 0;
-    let classData = {};
-
-    DB.students.forEach(s => {
-        if (s.grades && typeof s.grades[subj] === 'number') {
-            const note = s.grades[subj];
-            totalSum += note;
-            totalCount++;
-
-            const c = s.classe || 'Non classé';
-            if (!classData[c]) classData[c] = { sum: 0, count: 0 };
-            classData[c].sum += note;
-            classData[c].count++;
-        }
-    });
-
-    // Si aucune note n'est saisie
-    if (totalCount === 0) {
-        area.innerHTML = '<div style="padding: 30px; text-align: center; color: #e67e22; background: #fdf2e9; border-radius: 8px; font-weight: bold;">⚠️ Les lots sont générés, mais aucune note n\'a encore été importée pour cette matière.</div>';
-        return;
-    }
-
-    const globalAvg = (totalSum / totalCount).toFixed(2);
-
-    // 2. RENDU DES MOYENNES PAR CLASSE (Petites pilules esthétiques)
-    let classAvgsHtml = `<div style="display:flex; flex-wrap:wrap; gap:10px; margin-top: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee;">`;
-    classAvgsHtml += `<div style="flex:100%; font-weight:bold; color:#2c3e50; margin-bottom: 5px;">📍 Moyennes par classe :</div>`;
-    
-    Object.keys(classData).sort().forEach(c => {
-        const avg = (classData[c].sum / classData[c].count).toFixed(2);
-        classAvgsHtml += `<span style="background: #e8f0fe; border: 1px solid #d2e3fc; color: #1967d2; padding: 8px 15px; border-radius: 20px; font-size: 0.95rem; font-weight: bold;">
-            Classe ${c} : <span style="color: #2c3e50;">${avg}</span>
-        </span>`;
-    });
-    classAvgsHtml += `</div>`;
-
-    // 3. CALCULS PAR CORRECTEUR ET RENDU DU TABLEAU
-    let tableHtml = `
-        <table class="table table-bordered" style="width: 100%; margin-top: 25px; text-align: center; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-            <thead style="background: #34495e; color: white;">
-                <tr>
-                    <th style="padding: 15px; text-align: left;">👨‍🏫 Correcteur</th>
-                    <th style="padding: 15px;">Avancement</th>
-                    <th style="padding: 15px; background: #2980b9;">🎯 Moyenne du Lot</th>
-                    <th style="padding: 15px;">Écart (vs Moy. Globale)</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-    lots.forEach(prof => {
-        let profSum = 0, profCount = 0;
-
-        // On va chercher les vraies notes actuelles dans DB.students (et non dans l'archive du lot)
-        prof.copies.forEach(lotStudent => {
-            const s = DB.students.find(st => st.anonymat === lotStudent.anonymat);
-            if (s && s.grades && typeof s.grades[subj] === 'number') {
-                profSum += s.grades[subj];
-                profCount++;
+        DB.students.forEach(s => {
+            if (s.grades && typeof s.grades[subj] === 'number') {
+                const note = s.grades[subj];
+                totalSum += note; totalCount++;
+                const c = s.classe || 'Non classé';
+                if (!classData[c]) classData[c] = { sum: 0, count: 0 };
+                classData[c].sum += note; classData[c].count++;
             }
         });
 
-        const profAvg = profCount > 0 ? (profSum / profCount).toFixed(2) : '-';
-        let ecartHtml = '-';
+        if (totalCount > 0) {
+            const globalAvg = (totalSum / totalCount).toFixed(2);
 
-        // Calcul de l'écart (Delta)
-        if (profAvg !== '-' && globalAvg !== '-') {
-            const ecart = (profAvg - globalAvg).toFixed(2);
-            // Vert si au-dessus de la moyenne, rouge si en-dessous, gris si égal
-            const color = ecart > 0 ? '#27ae60' : (ecart < 0 ? '#e74c3c' : '#7f8c8d');
-            const sign = ecart > 0 ? '+' : '';
-            ecartHtml = `<span style="color: ${color}; font-weight: bold; font-size: 1.1rem; background: ${color}15; padding: 4px 10px; border-radius: 4px;">${sign}${ecart}</span>`;
+            // Rendu Moyennes par classe
+            let classAvgsHtml = `<div style="display:flex; flex-wrap:wrap; gap:10px; margin: 20px 0; background: #f8f9fa; padding: 15px; border-radius: 8px;">`;
+            classAvgsHtml += `<div style="flex:100%; font-weight:bold; margin-bottom:5px;">📍 Moyennes DNB par classe :</div>`;
+            Object.keys(classData).sort().forEach(c => {
+                const avg = (classData[c].sum / classData[c].count).toFixed(2);
+                classAvgsHtml += `<span class="badge" style="background:#e8f0fe; color:#1967d2; padding:8px; border-radius:20px;">${c} : ${avg}</span>`;
+            });
+            classAvgsHtml += `</div>`;
+
+            // Tableau des correcteurs
+            let tableHtml = `<table class="table table-bordered" style="background:white; text-align:center;">
+                <thead style="background:#34495e; color:white;">
+                    <tr><th>👨‍🏫 Correcteur</th><th>Avancement</th><th style="background:#2980b9;">🎯 Moy. Lot</th><th>Écart /Niveau</th></tr>
+                </thead><tbody>`;
+
+            lots.forEach(prof => {
+                let profSum = 0, profCount = 0;
+                prof.copies.forEach(lotStudent => {
+                    const s = DB.students.find(st => st.anonymat === lotStudent.anonymat);
+                    if (s && s.grades && typeof s.grades[subj] === 'number') {
+                        profSum += s.grades[subj]; profCount++;
+                    }
+                });
+                const profAvg = profCount > 0 ? (profSum / profCount).toFixed(2) : '-';
+                let ecartHtml = '-';
+                if (profAvg !== '-' && globalAvg !== '-') {
+                    const ecart = (profAvg - globalAvg).toFixed(2);
+                    const color = ecart > 0 ? '#27ae60' : (ecart < 0 ? '#e74c3c' : '#7f8c8d');
+                    ecartHtml = `<span style="color:${color}; font-weight:bold;">${ecart > 0 ? '+' : ''}${ecart}</span>`;
+                }
+                tableHtml += `<tr><td>${prof.name}</td><td>${profCount}/${prof.copies.length}</td><td style="font-weight:bold; color:#2980b9;">${profAvg}</td><td>${ecartHtml}</td></tr>`;
+            });
+            tableHtml += `</tbody></table>`;
+
+            area.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#ecf0f1; padding:20px; border-radius:8px; border-left:6px solid #2980b9;">
+                    <h4>Moyenne Globale ${subj.toUpperCase()}</h4>
+                    <div style="font-size:2.5rem; font-weight:bold; color:#2980b9;">${globalAvg}</div>
+                </div>
+                ${classAvgsHtml}
+                ${tableHtml}`;
         }
+    }
 
-        // Avancement (ex: 25 / 30 saisies)
-        const progressColor = profCount === prof.copies.length ? '#27ae60' : '#e67e22';
+    // --- PARTIE 2 : COMPARAISON GLOBALE DNB vs CONTRÔLE CONTINU (Nouvelle partie) ---
+    
+    if (DB.classStats && Object.keys(DB.classStats).length > 0) {
+        const hr = document.createElement('hr');
+        hr.style.margin = "40px 0";
+        area.appendChild(hr);
 
-        tableHtml += `
-            <tr>
-                <td style="text-align: left; font-weight: bold; color: #2c3e50; padding: 12px; font-size: 1.1rem;">${prof.name}</td>
-                <td style="padding: 12px; font-weight: bold; color: ${progressColor};">${profCount} / ${prof.copies.length}</td>
-                <td style="padding: 12px; font-weight: bold; font-size: 1.3rem; color: #2980b9;">${profAvg}</td>
-                <td style="padding: 12px;">${ecartHtml}</td>
-            </tr>
+        const compDiv = document.createElement('div');
+        compDiv.className = "card";
+        compDiv.style.borderTop = "4px solid #27ae60";
+        compDiv.innerHTML = `
+            <h4 style="color:#27ae60;">📊 Comparaison Bilan : DNB Blanc vs Moyennes Annuelles</h4>
+            <p style="font-size:0.9rem; color:#666;">Vue d'ensemble de toutes les matières importées via le fichier global.</p>
+            <div class="table-responsive">
+                ${getGlobalComparisonHtml()}
+            </div>
         `;
-    });
-
-    tableHtml += `</tbody></table>`;
-
-    // 4. ASSEMBLAGE FINAL DE L'INTERFACE
-    area.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; background: #ecf0f1; padding: 20px 30px; border-radius: 8px; border-left: 6px solid #2980b9; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-            <div>
-                <h4 style="margin: 0; color: #2c3e50; font-size: 1.3rem;">Moyenne Globale du Niveau</h4>
-                <p style="margin: 5px 0 0 0; color: #7f8c8d; font-size: 0.95rem;">Toutes classes et correcteurs confondus</p>
-            </div>
-            <div style="font-size: 3rem; font-weight: bold; color: #2980b9; line-height: 1;">
-                ${globalAvg} <span style="font-size: 1.2rem; color: #7f8c8d;">/ 20</span>
-            </div>
-        </div>
-        ${classAvgsHtml}
-        ${tableHtml}
-    `;
+        area.appendChild(compDiv);
+    }
 };
 
 // --- FONCTIONS MANQUANTES CORRIGÉES ---
@@ -11572,6 +11579,145 @@ window.generateCouponsPDF = function() {
 
     doc.save(`Coupons_Amenagements_Anonymes_${year}.pdf`);
 };
+
+/**
+ * Importation des moyennes par classe
+ */
+window.handleGlobalClassImport = function() {
+    const input = document.getElementById('fileGlobalAnnual'); // Réutilise l'id précédent
+    if (!input.files[0]) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+        
+        processClassAverages(jsonData);
+    };
+    reader.readAsArrayBuffer(input.files[0]);
+};
+
+function processClassAverages(data) {
+    // --- ÉTAPE 1 : RÉINITIALISATION TOTALE ---
+    // On efface les anciennes données pour que le nouveau fichier soit la seule référence
+    DB.classStats = {}; 
+    
+    // Mots-clés pour le mapping
+    const subjectsMap = {
+        fr: ['français', 'francais'],
+        math: ['mathématiques', 'maths'],
+        hg: ['histoire-géographie', 'hg', 'emc', 'moral'],
+        svt: ['svt'],
+        pc: ['physique-chimie', 'pc'],
+        tech: ['technologie', 'techno']
+    };
+
+    const headers = Object.keys(data[0]);
+    const kClasse = findKey(data[0], ['classe', 'division']);
+    
+    if (!kClasse) {
+        return alert("Erreur : Impossible de trouver la colonne 'Classe' ou 'Division'.");
+    }
+
+    let classCount = 0;
+    data.forEach(row => {
+        // --- ÉTAPE 2 : FILTRAGE DES LIGNES VIDES (PRONOTE) ---
+        const rawValue = row[kClasse];
+        if (rawValue === undefined || rawValue === null || String(rawValue).trim() === "" || String(rawValue).toLowerCase().includes("moyenne")) {
+            return; // On ignore les lignes de totalisation ou vides
+        }
+
+        const className = String(rawValue).trim();
+        DB.classStats[className] = {};
+        
+        // Mapping des matières
+        for (const [subId, aliases] of Object.entries(subjectsMap)) {
+            const colName = headers.find(h => aliases.some(a => h.toLowerCase().includes(a)));
+            if (colName) {
+                const val = cleanNumber(row[colName]);
+                if (val !== null) DB.classStats[className][subId] = val;
+            }
+        }
+        classCount++;
+    });
+
+    // --- ÉTAPE 3 : MISE À JOUR DE L'INTERFACE ---
+    alert(`✅ Synchronisation terminée : ${classCount} classes enregistrées. Les anciennes données ont été supprimées.`);
+    
+    // On force le rafraîchissement de l'affichage
+    if(typeof renderAnalyseCorrections === 'function') {
+        renderAnalyseCorrections();
+    }
+}
+/**
+ * Génère le tableau comparatif DNB Blanc vs Année
+ */
+function getGlobalComparisonHtml() {
+    if (!DB.classStats) return "<p>Veuillez importer les moyennes de classes.</p>";
+
+    const classes = Object.keys(DB.classStats).sort();
+    const subjs = { fr: 'Français', math: 'Maths', hg: 'HG/EMC', svt: 'SVT', pc: 'PC', tech: 'Techno' };
+
+    let html = `<table class='table'><thead><tr><th>Classe</th>`;
+    for(const name of Object.values(subjs)) html += `<th colspan="2" style="text-align:center; border-left:2px solid #ddd;">${name}</th>`;
+    html += `</tr><tr style="font-size:0.75rem;"><th></th>`;
+    for(let i=0; i<6; i++) html += `<th style="border-left:2px solid #ddd;">DNB</th><th>Année</th>`;
+    html += `</tr></thead><tbody>`;
+
+    classes.forEach(cls => {
+        html += `<tr><td><b>${cls}</b></td>`;
+        for(const [subId, label] of Object.entries(subjs)) {
+            // Calcul moyenne réelle DNB Blanc pour cette classe
+            const students = DB.students.filter(s => s.classe === cls && s.grades && s.grades[subId] != null);
+            const avgDNB = students.length > 0 ? (students.reduce((a,b) => a + b.grades[subId], 0) / students.length).toFixed(1) : "-";
+            const avgAnnuel = DB.classStats[cls][subId] || "-";
+            
+            let color = "";
+            if(avgDNB !== "-" && avgAnnuel !== "-") {
+                const diff = avgDNB - avgAnnuel;
+                color = diff > 1.5 ? "background:#fadbd8;" : (diff < -1.5 ? "background:#d4efdf;" : "");
+            }
+
+            html += `<td style="border-left:2px solid #ddd; ${color}">${avgDNB}</td><td style="color:#666;">${avgAnnuel}</td>`;
+        }
+        html += `</tr>`;
+    });
+
+    html += "</tbody></table>";
+    return html;
+}
+
+/**
+ * Mise à jour de la fonction de rendu pour inclure la comparaison
+ * Note : À intégrer dans votre fonction renderAnalyseCorrections() existante
+ */
+function getComparisonTableHtml(subj) {
+    const students = DB.students.filter(s => s.grades && s.grades[subj]);
+    if (students.length === 0) return "<p>Aucune donnée de comparaison disponible.</p>";
+
+    let html = `<table class='table'><thead><tr>
+                <th>Élève</th><th>Classe</th><th>DNB Blanc</th><th>Moy. Annuelle</th><th>Écart</th>
+                </tr></thead><tbody>`;
+
+    students.forEach(s => {
+        const dnb = s.grades[subj] || 0;
+        const annuel = (s.annualGrades && s.annualGrades[subj]) ? s.annualGrades[subj] : null;
+        const ecart = annuel !== null ? (dnb - annuel).toFixed(1) : "-";
+        const color = ecart > 2 ? 'text-danger' : (ecart < -2 ? 'text-primary' : 'text-success');
+
+        html += `<tr>
+            <td>${s.nom} ${s.prenom}</td>
+            <td>${s.classe}</td>
+            <td><b>${dnb}</b></td>
+            <td>${annuel || '-'}</td>
+            <td class="${color}"><b>${ecart}</b></td>
+        </tr>`;
+    });
+    html += "</tbody></table>";
+    return html;
+}
 // ----------------------
 </script>
 
