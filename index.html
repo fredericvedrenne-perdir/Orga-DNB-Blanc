@@ -1312,21 +1312,21 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
     </div> </div>
         
 		
-		<div id="res-analyse" class="section">
+<div id="res-analyse" class="section">
     <div class="card">
-       <div class="card" style="border-left: 5px solid var(--success);">
-    <h4>🚀 Import Global des Moyennes Annuelles</h4>
-    <p style="font-size: 0.85rem; color: #666;">
-        Importez un fichier contenant toutes les matières. Le système détectera les colonnes 
-        (ex: "Moyenne Math", "Moy. Français", etc.).
-    </p>
-    <div style="display: flex; gap: 15px; align-items: center;">
-        <input type="file" id="fileGlobalAnnual" accept=".csv, .xlsx" style="display:none" onchange="handleGlobalClassImport()">
-        <button class="btn btn-primary" onclick="document.getElementById('fileGlobalAnnual').click()">📂 Importer le fichier global</button>
-    </div>
-    <div id="importStats" style="margin-top:10px; font-weight:bold; color:var(--info);"></div>
-</div>
-</div><div class="card-header-flex">
+        
+        <div class="card" style="border-left: 5px solid var(--success); margin-bottom: 20px;">
+            <h4>🚀 Import Global des Moyennes Annuelles</h4>
+            <p style="font-size: 0.85rem; color: #666;">
+                Importez un fichier contenant toutes les matières. Le système détectera les colonnes 
+                (ex: "Moyenne Math", "Moy. Français", etc.).
+            </p>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <input type="file" id="fileGlobalAnnual" accept=".csv, .xlsx" style="display:none" onchange="handleGlobalClassImport()">
+                <button class="btn btn-primary" onclick="document.getElementById('fileGlobalAnnual').click()">📂 Importer le fichier global</button>
+            </div>
+            <div id="importStats" style="margin-top:10px; font-weight:bold; color:var(--info);"></div>
+        </div> <div class="card-header-flex">
             <h3>📊 Analyse Statistique des Corrections</h3>
             <select id="analyseSubjectSelect" onchange="renderAnalyseCorrections()" style="width: 250px; font-weight: bold; color: #2980b9; padding: 8px;">
                 <option value="fr">Français</option>
@@ -1343,8 +1343,9 @@ Aucune sortie anticipée n'est autorisée. Vous devez rester assis et silencieux
         </p>
 
         <div id="analyseResultsArea"></div>
-    </div>
-</div>
+        
+    </div> </div>
+
 		
         <div id="res-releves" class="section">
             <div class="card">
@@ -4060,19 +4061,7 @@ function exportSignPDF() {
     function openConvocOptions() { if (!DB.config.director) DB.config.director = { civ: "M. le Principal", name: "" }; if(DB.students.length === 0) return alert("Aucun élève"); if(Object.keys(DB.distribution).length === 0) return alert("Veuillez faire la répartition"); const sel = document.getElementById('convocStudentSelect'); sel.innerHTML = '<option value="all">-- Tous les élèves --</option>'; const sortedStudents = [...DB.students].sort((a,b) => a.nom.localeCompare(b.nom)); sortedStudents.forEach(s => { let opt = document.createElement('option'); opt.value = s.id; opt.text = `${s.nom} ${s.prenom} (${s.classe})`; sel.appendChild(opt); }); document.getElementById('convocOptionsModal').style.display = 'flex'; }
     function closeConvocOptions() { document.getElementById('convocOptionsModal').style.display = 'none'; }
 
-// =========================================================
-// === EXPORT CONVOCATIONS ÉLÈVES (VERSION V4 - TEXTE LONG) ===
-// =========================================================
 
-// =========================================================
-// === EXPORT CONVOCATIONS ÉLÈVES (MISE À JOUR : HEURE DE FIN) ===
-// =========================================================
-// =========================================================
-// === EXPORT CONVOCATIONS ÉLÈVES (V3 : TITRES CENTRÉS) ===
-// =========================================================
-// =========================================================
-// === EXPORT CONVOCATIONS ÉLÈVES (MISE À JOUR) ===
-// =========================================================
 // =========================================================
 // === EXPORT CONVOCATIONS ÉLÈVES (MISE À JOUR) ===
 // =========================================================
