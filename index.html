@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
     :root { --primary: #2c3e50; --secondary: #3498db; --accent: #e74c3c; --tt-color: #8e44ad; --amen-color: #e67e22; --light: #f8f9fa; --dark: #343a40; --success: #27ae60; --warning: #f39c12; --info: #17a2b8; }
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: #e9ecef; color: #333; height: 100vh; overflow: hidden; }
@@ -661,32 +662,44 @@ input:checked + .slider-modern:before { transform: translateX(22px); }
                         <label style="font-weight:bold; margin-bottom:10px; display:block; color:#34495e;">Titre de Direction</label>
                         
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                            
-                            <div id="civ-principal" onclick="setDirectorCiv('M. le Principal')" 
-                                 style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
-                                <div style="font-size:1.5rem;">👨‍💼</div>
-                                <div style="font-size:0.85rem; margin-top:5px;">M. le Principal</div>
-                            </div>
+    
+    <div id="civ-principal" onclick="setDirectorCiv('M. le Principal')" 
+         style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
+        <div style="font-size:1.5rem;">👨‍💼</div>
+        <div style="font-size:0.85rem; margin-top:5px;">M. le Principal</div>
+    </div>
 
-                            <div id="civ-principale" onclick="setDirectorCiv('Mme la Principale')" 
-                                 style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
-                                <div style="font-size:1.5rem;">👩‍💼</div>
-                                <div style="font-size:0.85rem; margin-top:5px;">Mme la Principale</div>
-                            </div>
+    <div id="civ-principale" onclick="setDirectorCiv('Mme la Principale')" 
+         style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
+        <div style="font-size:1.5rem;">👩‍💼</div>
+        <div style="font-size:0.85rem; margin-top:5px;">Mme la Principale</div>
+    </div>
 
-                            <div id="civ-adj" onclick="setDirectorCiv('M. le Principal Adjoint')" 
-                                 style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
-                                <div style="font-size:1.5rem;">👨‍💼</div>
-                                <div style="font-size:0.85rem; margin-top:5px;">M. le Principal Adjoint</div>
-                            </div>
+    <div id="civ-adj" onclick="setDirectorCiv('M. le Principal Adjoint')" 
+         style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
+        <div style="font-size:1.5rem;">👨‍💼</div>
+        <div style="font-size:0.85rem; margin-top:5px;">M. le Principal Adjoint</div>
+    </div>
 
-                            <div id="civ-adje" onclick="setDirectorCiv('Mme la Principale Adjointe')" 
-                                 style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
-                                <div style="font-size:1.5rem;">👩‍💼</div>
-                                <div style="font-size:0.85rem; margin-top:5px;">Mme la Principale Adjointe</div>
-                            </div>
-							
-                        </div>
+    <div id="civ-adje" onclick="setDirectorCiv('Mme la Principale Adjointe')" 
+         style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
+        <div style="font-size:1.5rem;">👩‍💼</div>
+        <div style="font-size:0.85rem; margin-top:5px;">Mme la Principale Adjointe</div>
+    </div>
+
+    <div id="civ-prov-adj" onclick="setDirectorCiv('M. le Proviseur Adjoint')" 
+         style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
+        <div style="font-size:1.5rem;">👨‍💼</div>
+        <div style="font-size:0.85rem; margin-top:5px;">M. le Proviseur Adjoint</div>
+    </div>
+
+    <div id="civ-prov-adje" onclick="setDirectorCiv('Mme la Proviseure Adjointe')" 
+         style="padding:12px; border:2px solid #eee; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s;">
+        <div style="font-size:1.5rem;">👩‍💼</div>
+        <div style="font-size:0.85rem; margin-top:5px;">Mme la Proviseure Adjointe</div>
+    </div>
+    
+</div>
 
                     </div>
                     <div class="col" style="flex:1;">
@@ -1727,21 +1740,19 @@ let firstUnsavedTime = null; // Date de la 1ère modif non sauvegardée
 const SAVE_ALERT_DELAY = 5 * 60 * 1000; // 10 minutes en millisecondes
 // const SAVE_ALERT_DELAY = 10 * 1000; // Décommentez cette ligne pour tester (10 secondes)
 
-// --- GESTION VISUELLE DU TITRE DE DIRECTION ---
-    function setDirectorCiv(val) {
-        // 1. Sauvegarde la valeur
-        DB.config.director.civ = val;
+function setDirectorCiv(val) {
+    DB.config.director.civ = val;
+    const sActive = "padding:12px; border:2px solid #3498db; background:#ebf5fb; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s; font-weight:bold; color:#2c3e50; transform:translateY(-2px); box-shadow:0 3px 5px rgba(0,0,0,0.1);";
+    const sInactive = "padding:12px; border:2px solid #eee; background:#fff; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s; color:#7f8c8d;";
 
-        // 2. Définition des styles (Actif / Inactif)
-        const sActive = "padding:12px; border:2px solid #3498db; background:#ebf5fb; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s; font-weight:bold; color:#2c3e50; transform:translateY(-2px); box-shadow:0 3px 5px rgba(0,0,0,0.1);";
-        const sInactive = "padding:12px; border:2px solid #eee; background:#fff; border-radius:8px; cursor:pointer; text-align:center; transition:0.2s; color:#7f8c8d;";
-
-        // 3. Mise à jour visuelle des 4 blocs
-        document.getElementById('civ-principal').style.cssText  = (val === 'M. le Principal') ? sActive : sInactive;
-        document.getElementById('civ-principale').style.cssText = (val === 'Mme la Principale') ? sActive : sInactive;
-        document.getElementById('civ-adj').style.cssText        = (val === 'M. le Principal Adjoint') ? sActive : sInactive;
-        document.getElementById('civ-adje').style.cssText       = (val === 'Mme la Principale Adjointe') ? sActive : sInactive;
-    }
+    document.getElementById('civ-principal').style.cssText  = (val === 'M. le Principal') ? sActive : sInactive;
+    document.getElementById('civ-principale').style.cssText = (val === 'Mme la Principale') ? sActive : sInactive;
+    document.getElementById('civ-adj').style.cssText        = (val === 'M. le Principal Adjoint') ? sActive : sInactive;
+    document.getElementById('civ-adje').style.cssText       = (val === 'Mme la Principale Adjointe') ? sActive : sInactive;
+    // AJOUT DES DEUX LIGNES SUIVANTES :
+    document.getElementById('civ-prov-adj').style.cssText   = (val === 'M. le Proviseur Adjoint') ? sActive : sInactive;
+    document.getElementById('civ-prov-adje').style.cssText  = (val === 'Mme la Proviseure Adjointe') ? sActive : sInactive;
+}
 
     window.onload = function() { 
         renderExamTable(); checkLogo(); checkSignature();
@@ -10949,7 +10960,7 @@ window.renderAnalyseCorrections = function() {
             // Tableau des correcteurs
             let tableHtml = `<table class="table table-bordered" style="background:white; text-align:center;">
                 <thead style="background:#34495e; color:white;">
-                    <tr><th>👨‍🏫 Correcteur</th><th>Avancement</th><th style="background:#2980b9;">🎯 Moy. Lot</th><th>Écart /Niveau</th></tr>
+                    <tr><th>👨‍🏫 Correcteur</th><th>Avancement</th><th style="background-color: #f4f6f9; color: #2c3e50;">🎯 Moyenne du Lot</th><th>Écart /Niveau</th></tr>
                 </thead><tbody>`;
 
             lots.forEach(prof => {
@@ -10981,7 +10992,9 @@ window.renderAnalyseCorrections = function() {
         }
     }
 
-    // --- PARTIE 2 : COMPARAISON GLOBALE DNB vs CONTRÔLE CONTINU (Nouvelle partie) ---
+    // ============================================================================
+    // PARTIE 2 : COMPARAISON GLOBALE DNB vs CONTRÔLE CONTINU (Injection HTML)
+    // ============================================================================
     
     if (DB.classStats && Object.keys(DB.classStats).length > 0) {
         const hr = document.createElement('hr');
@@ -10991,11 +11004,33 @@ window.renderAnalyseCorrections = function() {
         const compDiv = document.createElement('div');
         compDiv.className = "card";
         compDiv.style.borderTop = "4px solid #27ae60";
+        
         compDiv.innerHTML = `
-            <h4 style="color:#27ae60;">📊 Comparaison Bilan : DNB Blanc vs Moyennes Annuelles</h4>
-            <p style="font-size:0.9rem; color:#666;">Vue d'ensemble de toutes les matières importées via le fichier global.</p>
-            <div class="table-responsive">
-                ${getGlobalComparisonHtml()}
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 15px 0 15px; margin-bottom: 15px;">
+                
+                <div>
+                    <h4 style="color:#27ae60; margin: 0 0 5px 0;">📊 Comparaison Bilan : DNB Blanc vs Moyennes Annuelles</h4>
+                    <p style="font-size:0.9rem; color:#666; margin: 0;">Vue d'ensemble de toutes les matières importées via le fichier global.</p>
+                </div>
+                
+                <div role="group" aria-label="Options d'exportation" style="display: flex; gap: 10px;">
+                    <button onclick="window.exportTableToExcel('tableComparatifNiveau')" 
+                            style="background-color: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" 
+                            aria-label="Exporter le tableau au format Excel">
+                        📊 Export Excel
+                    </button>
+                    
+<button onclick="window.exportTableToPDF()" 
+        style="background-color: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" 
+        aria-label="Exporter le tableau au format PDF">
+    📄 Export PDF
+</button>                </div>
+            </div>
+            
+            <div class="table-responsive" style="padding: 0 15px 15px 15px;">
+                <div id="zoneCapturePDF" style="background-color: #ffffff; padding: 10px;">
+                    ${getGlobalComparisonHtml()}
+                </div>
             </div>
         `;
         area.appendChild(compDiv);
@@ -11640,41 +11675,140 @@ function processClassAverages(data) {
         renderAnalyseCorrections();
     }
 }
-/**
- * Génère le tableau comparatif DNB Blanc vs Année
- */
+
+// ============================================================================
+// GÉNÉRATION DU TABLEAU DE COMPARAISON GLOBAL (AVEC NOMS DES CORRECTEURS)
+// ============================================================================
+
 function getGlobalComparisonHtml() {
     if (!DB.classStats) return "<p>Veuillez importer les moyennes de classes.</p>";
 
     const classes = Object.keys(DB.classStats).sort();
     const subjs = { fr: 'Français', math: 'Maths', hg: 'HG/EMC', svt: 'SVT', pc: 'PC', tech: 'Techno' };
 
-    let html = `<table class='table'><thead><tr><th>Classe</th>`;
-    for(const name of Object.values(subjs)) html += `<th colspan="2" style="text-align:center; border-left:2px solid #ddd;">${name}</th>`;
-    html += `</tr><tr style="font-size:0.75rem;"><th></th>`;
-    for(let i=0; i<6; i++) html += `<th style="border-left:2px solid #ddd;">DNB</th><th>Année</th>`;
+    let html = `<table id="tableComparatifNiveau" class='table table-bordered' style="border: 1px solid #ddd; background-color: #ffffff;">
+        <thead>
+            <tr>
+                <th style="background-color: #f4f6f9; vertical-align: middle; border-bottom: 2px solid #ddd;">Classe</th>`;
+    
+    for(const name of Object.values(subjs)) {
+        html += `<th colspan="2" style="text-align:center; border-left: 2px solid #ddd; border-bottom: 2px solid #ddd; background-color: #f4f6f9;">${name}</th>`;
+    }
+    
+    html += `</tr><tr style="font-size:0.75rem; background-color: #f4f6f9;">
+                <th style="border-bottom: 2px solid #ddd;"></th>`;
+    for(let i=0; i<6; i++) {
+        html += `<th style="border-left: 2px solid #ddd; border-bottom: 2px solid #ddd;">DNB Blanc</th>
+                 <th style="border-bottom: 2px solid #ddd;">Année</th>`;
+    }
     html += `</tr></thead><tbody>`;
 
+    let globalStats = {};
+    for (const subId in subjs) {
+        globalStats[subId] = { sumDnb: 0, countDnb: 0, sumAnnuel: 0, countAnnuel: 0 };
+    }
+
+    // Parcours de chaque classe
     classes.forEach(cls => {
-        html += `<tr><td><b>${cls}</b></td>`;
+        html += `<tr><td style="border-right: 2px solid #ddd; vertical-align: middle;"><b>${cls}</b></td>`;
+        
+        // Parcours de chaque matière pour cette classe
         for(const [subId, label] of Object.entries(subjs)) {
-            // Calcul moyenne réelle DNB Blanc pour cette classe
-            const students = DB.students.filter(s => s.classe === cls && s.grades && s.grades[subId] != null);
-            const avgDNB = students.length > 0 ? (students.reduce((a,b) => a + b.grades[subId], 0) / students.length).toFixed(1) : "-";
-            const avgAnnuel = DB.classStats[cls][subId] || "-";
             
-            let color = "";
-            if(avgDNB !== "-" && avgAnnuel !== "-") {
-                const diff = avgDNB - avgAnnuel;
-                color = diff > 1.5 ? "background:#fadbd8;" : (diff < -1.5 ? "background:#d4efdf;" : "");
+            // 1. Calcul DNB
+            const students = DB.students.filter(s => s.classe === cls && s.grades && s.grades[subId] != null);
+            let avgDNB = "-";
+            if (students.length > 0) {
+                const sum = students.reduce((a,b) => a + b.grades[subId], 0);
+                avgDNB = (sum / students.length).toFixed(1);
+                globalStats[subId].sumDnb += sum;
+                globalStats[subId].countDnb += students.length;
             }
 
-            html += `<td style="border-left:2px solid #ddd; ${color}">${avgDNB}</td><td style="color:#666;">${avgAnnuel}</td>`;
+            // 2. Calcul Année
+            const avgAnnuelStr = DB.classStats[cls][subId];
+            const avgAnnuel = avgAnnuelStr ? parseFloat(avgAnnuelStr) : "-";
+            if (avgAnnuel !== "-") {
+                globalStats[subId].sumAnnuel += avgAnnuel;
+                globalStats[subId].countAnnuel++;
+            }
+
+            // 3. Logique métier : Alertes ciblées (Couleurs)
+            let bgColor = "";
+            let textColor = "";
+            
+            if(avgDNB !== "-" && avgAnnuel !== "-") {
+                const diff = parseFloat(avgDNB) - avgAnnuel;
+                if (diff <= -0.5) { 
+                    bgColor = "background-color: #f8d7da;"; 
+                    textColor = "color: #721c24; font-weight: bold;";
+                } else if (diff >= 0.5) { 
+                    bgColor = "background-color: #d4edda;";
+                    textColor = "color: #155724; font-weight: bold;";
+                }
+            }
+
+            // 4. RECHERCHE DU CORRECTEUR (CORRIGÉ)
+            // Le logiciel va maintenant chercher la vraie affectation dans "manualMap"
+            let correctorHtml = "";
+            if (DB.corrections && DB.corrections.settings && DB.corrections.settings[subId]) {
+                const config = DB.corrections.settings[subId];
+                
+                // On s'assure qu'on est bien en mode manuel (Lot Indivisible)
+                if (config.mode === 'manual_class' && config.manualMap) {
+                    const profId = config.manualMap[cls]; // On récupère l'ID exact assigné à cette classe
+                    
+                    if (profId) {
+                        const teacher = DB.teachers ? DB.teachers.find(t => String(t.id) === String(profId)) : null;
+                        if (teacher) {
+                            const civ = teacher.civ || "";
+                            const nom = teacher.nom || "";
+                            correctorHtml = `<br><span style="font-size: 0.65rem; color: #7f8c8d; font-weight: normal;">${civ} ${nom}</span>`;
+                        }
+                    }
+                }
+            }
+
+            // Injection dans la cellule (Note + Nom du prof en dessous)
+            html += `<td style="border-left: 2px solid #ddd; text-align: center; vertical-align: middle; ${bgColor} ${textColor}">
+                        ${avgDNB}
+                        ${correctorHtml}
+                     </td>
+                     <td style="color:#666; text-align: center; vertical-align: middle;">
+                        ${avgAnnuel !== "-" ? avgAnnuel.toFixed(1) : "-"}
+                     </td>`;
         }
         html += `</tr>`;
     });
 
-    html += "</tbody></table>";
+    html += `</tbody>
+             <tfoot style="background-color: #f8f9fa; border-top: 2px solid #ddd;">
+                <tr>
+                    <td style="font-weight: bold; font-size: 0.95rem; border-right: 2px solid #ddd; vertical-align: middle;">Cohorte</td>`;
+
+    for(const subId of Object.keys(subjs)) {
+        const stats = globalStats[subId];
+        const gDnb = stats.countDnb > 0 ? (stats.sumDnb / stats.countDnb).toFixed(1) : "-";
+        const gAnnuel = stats.countAnnuel > 0 ? (stats.sumAnnuel / stats.countAnnuel).toFixed(1) : "-";
+
+        let bgColor = "";
+        let textColor = "";
+        if (gDnb !== "-" && gAnnuel !== "-") {
+            const diff = parseFloat(gDnb) - parseFloat(gAnnuel);
+            if (diff <= -0.5) {
+                bgColor = "background-color: #f8d7da;";
+                textColor = "color: #721c24; font-weight: bold;";
+            } else if (diff >= 0.5) {
+                bgColor = "background-color: #d4edda;";
+                textColor = "color: #155724; font-weight: bold;";
+            }
+        }
+
+        html += `<td style="border-left: 2px solid #ddd; font-weight:bold; text-align: center; vertical-align: middle; ${bgColor} ${textColor}">${gDnb}</td>
+                 <td style="font-weight:bold; color:#2c3e50; text-align: center; vertical-align: middle;">${gAnnuel}</td>`;
+    }
+
+    html += `</tr></tfoot></table>`;
     return html;
 }
 
@@ -11707,6 +11841,107 @@ function getComparisonTableHtml(subj) {
     html += "</tbody></table>";
     return html;
 }
+
+// ============================================================================
+// FONCTIONS D'EXPORTATION (EXCEL & PDF)
+// ============================================================================
+
+window.exportTableToExcel = function(tableId, filename = 'Comparatif_DNB_Blanc.xls') {
+    const table = document.getElementById(tableId);
+    if (!table) {
+        alert("Tableau introuvable pour l'export.");
+        return;
+    }
+
+    const tableClone = table.cloneNode(true);
+    const htmlCode = tableClone.outerHTML;
+
+    const template = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office"
+              xmlns:x="urn:schemas-microsoft-com:office:excel"
+              xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta charset="UTF-8">
+            <style> table, td, th { border: 1px solid #dddddd; } </style>
+        </head>
+        <body>${htmlCode}</body>
+        </html>
+    `;
+
+    const blob = new Blob([template], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+/**
+ * Exporte le tableau en PDF en utilisant le moteur natif du navigateur.
+ * Avantages : Instantané, texte vectoriel, pas de dépendance externe.
+ */
+/**
+ * Exporte le tableau comparatif en PDF en utilisant jsPDF et autoTable.
+ * Avantages : Génération instantanée, téléchargement direct, texte vectoriel net.
+ */
+window.exportTableToPDF = function() {
+    // 1. Initialisation de jsPDF (comme dans votre script de convocations)
+    // On utilise 'l' (landscape/paysage) car le tableau a 13 colonnes
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4'); 
+    
+    const year = DB.config.year || new Date().getFullYear();
+    const schoolName = DB.config.schoolName || "Établissement";
+
+    // 2. En-tête du document PDF
+    doc.setFontSize(16).setTextColor(44, 62, 80).setFont("helvetica", "bold");
+    doc.text("Comparaison Bilan : DNB Blanc vs Moyennes Annuelles", 148, 15, { align: 'center' });
+    
+    doc.setFontSize(11).setTextColor(100).setFont("helvetica", "normal");
+    doc.text(`${schoolName} - Session ${year}`, 148, 22, { align: 'center' });
+
+    // 3. Utilisation de autoTable pour aspirer le tableau HTML
+    doc.autoTable({
+        html: '#tableComparatifNiveau', // On cible directement l'ID de notre tableau
+        startY: 30,
+        theme: 'grid',
+        useCss: true, // MAGIQUE : Dit à autoTable de conserver vos couleurs rouges/vertes inline
+        styles: {
+            font: 'helvetica',
+            fontSize: 9, // Police légèrement réduite pour que tout rentre
+            valign: 'middle',
+            halign: 'center',
+            lineWidth: 0.1,
+            lineColor: [200, 200, 200]
+        },
+        headStyles: {
+            fillColor: [244, 246, 249],
+            textColor: [44, 62, 80],
+            fontStyle: 'bold'
+        },
+        footStyles: {
+            fillColor: [248, 249, 250],
+            textColor: [44, 62, 80],
+            fontStyle: 'bold'
+        },
+        // Hook pour personnaliser certaines cellules à la volée
+        didParseCell: function(data) {
+            // On s'assure que la colonne 0 (Noms des classes) soit alignée à gauche et en gras
+            if (data.column.index === 0) {
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.halign = 'left';
+            }
+        }
+    });
+
+    // 4. Déclenchement du téléchargement immédiat
+    doc.save(`Comparatif_DNB_Blanc_${year}.pdf`);
+};
 // ----------------------
 </script>
 
